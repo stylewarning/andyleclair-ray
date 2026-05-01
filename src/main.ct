@@ -1,6 +1,9 @@
 (cl:defpackage #:ray
   (:use #:coalton #:coalton-prelude)
-  (:local-nicknames (#:file #:coalton/file)))
+  (:local-nicknames
+    (#:file #:coalton/file)
+    (#:it #:coalton/iterator)
+    (#:sh #:coalton/show)))
 
 (cl:in-package #:ray)
 
@@ -22,37 +25,41 @@
   (define (generate-pixels width height)
     [(Color x y 0) :for x :below width :for y :below height])
 
-  (declare ppm-header (Void -> String)) 
-  (define (ppm-header)
-          (lisp (-> String) () 
-            (cl:format cl:nil "P3~%~D ~D~%~D~%" *width* *height* *colors*)))
+  (declare write-header (file:FileStream Char -> Void)) 
+  (define (write-header stream)
+    (lisp (-> Void) (stream)
+      (cl:format stream "P3~%~D ~D~%~D~%" *width* *height* *colors*)
+      (cl:values)))
   
-  (declare pixel->string (Color -> String))
-  (define (pixel->string pixel)
+  (declare write-pixel (file:FileStream Char * Color -> Void))
+  (define (write-pixel stream pixel)
     (let ((r (.r pixel))
           (g (.g pixel))
           (b (.b pixel)))
-      (lisp (-> String) (r g b) 
-        (cl:format cl:nil "~D ~D ~D~%" r g b))))
+      (lisp (-> Void) (stream r g b) 
+        (cl:format stream "~D ~D ~D~%" r g b)
+        (cl:values))))
   
-  (declare pixels->string ((List Color) -> String))
-  (define (pixels->string pixels)
-    (fold (fn (acc px) (<> acc (pixel->string px))) "" pixels))
+  (declare write-pixels (file:FileStream Char * (List Color) -> Void))
+  (define (write-pixels stream pixels)
+    (it:for-each! (fn (px) (write-pixel stream px)) (it:into-iter pixels)))
   
-  (declare save-image (Void -> Result file:FileError Unit))
+  (declare save-image (Void -> (Result file:FileError UFix)))
   (define (save-image)
-    (let* ((header (ppm-header))
-           (all-pixels (generate-pixels *width* *height*))
-           (body (pixels->string all-pixels)))
-      (file:with-open-file "out.ppm"
-        (fn (stream)
-          (file:write-string stream header)
-          (file:write-string stream body))
-        :direction file::Output
-        :if-exists file::Overwrite)))
+    (let all-pixels = (generate-pixels *width* *height*))
+    (file:with-open-file "out.ppm"
+      (fn (stream)
+        (write-header stream)
+        (write-pixels stream all-pixels)
+        (Ok 0))
+      :direction file::Output
+      :if-exists file::Overwrite))
 
   (declare main (Void -> Void))
   (define (main)
     (match (save-image)
-      ((Ok _) (lisp (-> Void) () (cl:format cl:t "Wrote file!") (cl:values)))
-      ((Err errored) (lisp (-> Void) (errored) (cl:format cl:t "Got error!! ~A" (cl:the (String) errored)) (cl:values))))))
+      ((Ok _) (show "Wrote file!"))
+      ((Err errored)
+        (match errored
+          ((file:FileError str) (show "File error: ") (show str))
+          (_None (show "Unknown error occurred")))))))
