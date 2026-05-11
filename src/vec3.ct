@@ -4,6 +4,7 @@
   (:export #:Vec3
            #:unit-vector
            #:vec-length
+           #:vec-length-squared
            #:vec-add
            #:vec-add-scalar
            #:vec-sub
@@ -24,13 +25,13 @@
   (define (unit-vector v)
     (vec-div-scalar v (vec-length v)))
  
-  (declare length-squared (Vec3 -> F64))
-  (define (length-squared (Vec3 x y z))
+  (declare vec-length-squared (Vec3 -> F64))
+  (define (vec-length-squared (Vec3 x y z))
     (+ (* x x) (+ (* y y) (* z z))))
   
   (declare vec-length (Vec3 -> F64))
   (define (vec-length vec)
-    (math:sqrt (length-squared vec)))
+    (math:sqrt (vec-length-squared vec)))
   
   (declare vec-add (Vec3 * Vec3 -> Vec3))
   (define (vec-add (Vec3 ux uy uz) (Vec3 vx vy vz))
