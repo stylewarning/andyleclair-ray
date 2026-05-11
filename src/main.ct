@@ -16,52 +16,52 @@
 (cl:in-package #:ray)
 
 (coalton-toplevel
-  (declare *aspect-ratio* Fraction)
-  (define *aspect-ratio* (/ 16 9))
+  (declare ASPECT-RATIO Fraction)
+  (define ASPECT-RATIO (/ 16 9))
   
-  (declare *width* Integer)
-  (define *width* 400)
+  (declare IMAGE-WIDTH Integer)
+  (define IMAGE-WIDTH 400)
   
-  (declare *height* Integer)
-  (define *height* (floor (/ (into *width*) *aspect-ratio*)))
+  (declare IMAGE-HEIGHT Integer)
+  (define IMAGE-HEIGHT (floor (/ (into IMAGE-WIDTH) ASPECT-RATIO)))
   
-  (declare *focal-length* F64)
-  (define *focal-length* 1.0d0)
+  (declare FOCAL-LENGTH F64)
+  (define FOCAL-LENGTH 1.0d0)
   
-  (declare *viewport-height* F64)
-  (define *viewport-height* 2.0d0)
+  (declare VIEWPORT-HEIGHT F64)
+  (define VIEWPORT-HEIGHT 2.0d0)
   
-  (declare *viewport-width* F64)
-  (define *viewport-width* (* *viewport-height* (/ (unwrap-as F64 *width*) (unwrap-as F64 *height*))))
+  (declare VIEWPORT-WIDTH F64)
+  (define VIEWPORT-WIDTH (* VIEWPORT-HEIGHT (/ (unwrap-as F64 IMAGE-WIDTH) (unwrap-as F64 IMAGE-HEIGHT))))
   
-  (declare *colors* Integer)
-  (define *colors* 255)
+  (declare COLORS Integer)
+  (define COLORS 255)
   
-  (declare *camera-center* vec:Vec3)
-  (define *camera-center* (vec:Vec3 0.0d0 0.0d0 0.0d0))
+  (declare CAMERA-CENTER vec:Vec3)
+  (define CAMERA-CENTER (vec:Vec3 0.0d0 0.0d0 0.0d0))
   
-  (declare *viewport-u* vec:Vec3)
-  (define *viewport-u* (vec:Vec3 *viewport-width* 0.0d0 0.0d0))
+  (declare VIEWPORT-U vec:Vec3)
+  (define VIEWPORT-U (vec:Vec3 VIEWPORT-WIDTH 0.0d0 0.0d0))
   
-  (declare *viewport-v* vec:Vec3)
-  (define *viewport-v* (vec:Vec3 0.0d0 (negate *viewport-height*) 0.0d0))
+  (declare VIEWPORT-V vec:Vec3)
+  (define VIEWPORT-V (vec:Vec3 0.0d0 (negate VIEWPORT-HEIGHT) 0.0d0))
   
-  (declare *pixel-delta-u* vec:Vec3)
-  (define *pixel-delta-u* (vec:vec-div-scalar *viewport-u* (unwrap-as F64 *width*)))
+  (declare PIXEL-DELTA-U vec:Vec3)
+  (define PIXEL-DELTA-U (vec:vec-div-scalar VIEWPORT-U (unwrap-as F64 IMAGE-WIDTH)))
 
-  (declare *pixel-delta-v* vec:Vec3)
-  (define *pixel-delta-v* (vec:vec-div-scalar *viewport-v* (unwrap-as F64 *height*)))
+  (declare PIXEL-DELTA-V vec:Vec3)
+  (define PIXEL-DELTA-V (vec:vec-div-scalar VIEWPORT-V (unwrap-as F64 IMAGE-HEIGHT)))
   
-  (declare *viewport-upper-left* vec:Vec3)
-  (define *viewport-upper-left* (vec:vec-sub 
+  (declare VIEWPORT-UPPER-LEFT vec:Vec3)
+  (define VIEWPORT-UPPER-LEFT (vec:vec-sub 
                                   (vec:vec-sub 
-                                    (vec:vec-sub *camera-center* (vec:Vec3 0.0d0 0.0d0 *focal-length*)) 
-                                    (vec:vec-div-scalar *viewport-u* 2.0d0))
-                                  (vec:vec-div-scalar *viewport-v* 2.0d0)))
+                                    (vec:vec-sub CAMERA-CENTER (vec:Vec3 0.0d0 0.0d0 FOCAL-LENGTH)) 
+                                    (vec:vec-div-scalar VIEWPORT-U 2.0d0))
+                                  (vec:vec-div-scalar VIEWPORT-V 2.0d0)))
   
-  (declare *pixel-00-loc* vec:Vec3)
-  (define *pixel-00-loc* (vec:vec-add *viewport-upper-left*
-                                      (vec:vec-mul-scalar (vec:vec-add *pixel-delta-u* *pixel-delta-v*) 0.5d0)))
+  (declare PIXEL-00-LOC vec:Vec3)
+  (define PIXEL-00-LOC (vec:vec-add VIEWPORT-UPPER-LEFT
+                                      (vec:vec-mul-scalar (vec:vec-add PIXEL-DELTA-U PIXEL-DELTA-V) 0.5d0)))
   
   ; These must be structs that have an implementation of Hittable:hit?
   (define-type Hittable
@@ -103,7 +103,7 @@
   (declare write-header (file:FileStream Char -> Void)) 
   (define (write-header stream)
     (lisp (-> Void) (stream)
-      (cl:format stream "P3~%~D ~D~%~D~%" *width* *height* *colors*)
+      (cl:format stream "P3~%~D ~D~%~D~%" IMAGE-WIDTH IMAGE-HEIGHT COLORS)
       (cl:values)))
   
   (declare write-pixel (file:FileStream Char * col:Color -> Void))
@@ -117,20 +117,20 @@
   
   (declare pixel-center (Integer * Integer -> vec:Vec3))
   (define (pixel-center i j)
-    (vec:vec-add *pixel-00-loc* 
-                 (vec:vec-add (vec:vec-mul-scalar *pixel-delta-u* (unwrap-as F64 i)) 
-                              (vec:vec-mul-scalar *pixel-delta-v* (unwrap-as F64 j)))))
+    (vec:vec-add PIXEL-00-LOC
+                 (vec:vec-add (vec:vec-mul-scalar PIXEL-DELTA-U (unwrap-as F64 i)) 
+                              (vec:vec-mul-scalar PIXEL-DELTA-V (unwrap-as F64 j)))))
   
   (declare write-pixels (file:FileStream Char -> Void))
   (define (write-pixels stream)
     (for* ((y 0 (1+ y)))
-         :repeat (unwrap-as UFix *height*)
-         (print (<> "Scanlines remaining: " (into (- *height* y))))
+         :repeat (unwrap-as UFix IMAGE-HEIGHT)
+         (print (<> "Scanlines remaining: " (into (- IMAGE-HEIGHT y))))
          (for* ((x 0 (1+ x)))
-              :repeat (unwrap-as UFix *width*)
+              :repeat (unwrap-as UFix IMAGE-WIDTH)
               (let pixel-center = (pixel-center x y))
-              (let ray-direction = (vec:vec-sub pixel-center *camera-center*))
-              (let ray = (r:Ray *camera-center* ray-direction))
+              (let ray-direction = (vec:vec-sub pixel-center CAMERA-CENTER))
+              (let ray = (r:Ray CAMERA-CENTER ray-direction))
               (let color = (ray-color ray))
               (write-pixel stream color))))
   
