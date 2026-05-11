@@ -1,0 +1,37 @@
+(cl:defpackage #:ray/sphere
+               (:use #:coalton #:coalton-prelude)
+               (:local-nicknames (#:v #:ray/vec3)
+                                 (#:h #:ray/hittable)
+                                 (#:r #:ray/ray))
+               (:export #:Sphere))
+
+(cl:in-package #:ray/sphere)
+
+(coalton-toplevel
+  (define-struct Sphere
+    (center v:Vec3)
+    (radius F64))
+  
+  (define-instance (h:Hittable Sphere)
+    (define (h:hit? (Sphere center radius) ray tmin tmax)
+      (let (r:Ray origin direction) = ray)
+      (let oc = (v:vec-sub center origin))
+      (let a = (v:vec-length-squared direction))
+      (let h = (v:vec-dot direction oc))
+      (let c = (- (v:vec-length-squared oc) (^ radius 2)))
+      (let discriminant = (- (^ h 2) (* a c)))
+      (cond ((< discriminant 0) None)
+            (True
+              (let sqrtd = (sqrt discriminant))
+              (let minus-root = (/ (- h sqrtd) a))
+              (let pos-root = (/ (+ h sqrtd) a))
+              (cond ((or (or (<= minus-root tmin) (<= tmax minus-root))                     
+                         (or (<= pos-root tmin) (<= tmax pos-root))) 
+                      None)
+                    (True
+                      (let point = (r:ray-at ray minus-root))
+                      (let outward-normal = (v:vec-div-scalar (v:vec-sub point center) radius))
+                      (let front-face = (< (v:vec-dot direction outward-normal) 0))
+                      (let normal = (if front-face outward-normal (v:vec-negate outward-normal)))
+                      (Some (h:HitRecord point normal minus-root front-face))))))))
+)

@@ -4,11 +4,14 @@
   (:local-nicknames
     (#:file #:coalton/file)
     (#:it #:coalton/iterator)
+    (#:list #:coalton/list)
     (#:math #:coalton/math)
     (#:sh #:coalton/show)
     (#:col #:ray/color)
     (#:vec #:ray/vec3)
-    (#:r #:ray/ray)))
+    (#:h #:ray/hittable)
+    (#:r #:ray/ray)
+    (#:s #:ray/sphere)))
 
 (cl:in-package #:ray)
 
@@ -60,29 +63,42 @@
   (define *pixel-00-loc* (vec:vec-add *viewport-upper-left*
                                       (vec:vec-mul-scalar (vec:vec-add *pixel-delta-u* *pixel-delta-v*) 0.5d0)))
   
+  ; These must be structs that have an implementation of Hittable:hit?
+  (define-type Hittable
+    "Any type that is Hittable, that is has an instance of the Hittable typeclass"
+    Sphere)
+  
+  (declare WORLD (List s:Sphere))
+  (define WORLD [
+    (s:Sphere (vec:Vec3 0.0d0 0.0d0 -1.0d0) 0.5d0)
+    (s:Sphere (vec:Vec3 0.0d0 -100.5d0 -1.0d0) 100.0d0)
+    ])
+  
+  (define INFINITY (the F64 math:infinity))
+  
+  (declare hit-any? (r:Ray * F64 * F64 -> Optional h:HitRecord))
+  (define (hit-any? ray tmin tmax)
+    (let (Tuple closest-hit _) =
+      (fold 
+        (fn ((Tuple hit-rec closest-so-far) obj) 
+          (match (h:hit? obj ray tmin closest-so-far)
+            ((Some hit) (Tuple (Some hit) (.t hit)))
+            ((None) (Tuple hit-rec closest-so-far))))
+        (Tuple None tmax) 
+        WORLD))
+    closest-hit)
+  
   (declare ray-color (r:Ray -> col:Color))
   (define (ray-color r)
-    (let t = (hit-sphere? (vec:Vec3 0.0d0 0.0d0 -1.0d0) 0.5d0 r))
-    (cond ((> t 0.0d0) 
-            (let (vec:Vec3 nx ny nz) = (vec:unit-vector (vec:vec-sub (r:ray-at r t) (vec:Vec3 0.0d0 0.0d0 -1.0d0))))
-            (col:color-mul (col:Color (+ nx 1.0d0) (+ ny 1.0d0) (+ nz 1.0d0)) 0.5d0))
-          (True 
-            (let unit-direction = (vec:unit-vector (.direction r)))
-            (let alpha = (* 0.5d0 (+ (.y unit-direction) 1.0d0)))
-            (col:color-add 
-              (col:color-mul (col:Color 1.0d0 1.0d0 1.0d0) (- 1.0d0 alpha))
-              (col:color-mul (col:Color 0.5d0 0.7d0 1.0d0) alpha)))))    
-
-  (declare hit-sphere? (vec:Vec3 * F64 * r:Ray -> F64))
-  (define (hit-sphere? center radius (r:Ray origin direction))
-    (let oc = (vec:vec-sub center origin))
-    (let a = (vec:vec-length-squared direction))
-    (let h = (vec:vec-dot direction oc))
-    (let c = (- (vec:vec-length-squared oc) (^ radius 2)))
-    (let discriminant = (- (^ h 2) (* a c)))
-    (if (< discriminant 0)
-        -1.0d0
-        (/ (- h (sqrt discriminant)) a)))
+    (match (hit-any? r 0 INFINITY)
+      ((Some (h:HitRecord _ (vec:Vec3 nx ny nz) _ _))
+        (col:color-mul (col:Color (+ nx 1.0d0) (+ ny 1.0d0) (+ nz 1.0d0)) 0.5d0))
+      ((None)
+        (let unit-direction = (vec:unit-vector (.direction r)))
+        (let alpha = (* 0.5d0 (+ (.y unit-direction) 1.0d0)))
+        (col:color-add 
+          (col:color-mul (col:Color 1.0d0 1.0d0 1.0d0) (- 1.0d0 alpha))
+          (col:color-mul (col:Color 0.5d0 0.7d0 1.0d0) alpha)))))
 
   (declare write-header (file:FileStream Char -> Void)) 
   (define (write-header stream)

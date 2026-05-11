@@ -11,7 +11,8 @@
            #:vec-mul
            #:vec-mul-scalar
            #:vec-div-scalar
-           #:vec-dot))
+           #:vec-dot
+           #:vec-negate))
 
 (cl:in-package #:ray/vec3)
 
@@ -65,5 +66,9 @@
   
   (declare vec-div-scalar (Vec3 * F64 -> Vec3))
   (define (vec-div-scalar vec t)
-    (vec-mul-scalar vec (/ 1.0d0 t))) 
+    (vec-mul-scalar vec (/ 1.0d0 t)))
+  
+  (declare vec-negate (Vec3 -> Vec3))
+  (define (vec-negate (Vec3 x y z))
+    (Vec3 (negate x) (negate y) (negate z)))
 )
