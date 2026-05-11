@@ -5,6 +5,9 @@
   :serial t
   :components
   (
+    (:ct-file "color")
+    (:ct-file "vec3")
+    (:ct-file "ray")
     (:ct-file "main")
   )
 )

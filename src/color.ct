@@ -1,0 +1,21 @@
+(cl:defpackage #:ray/color
+  (:use #:coalton #:coalton-prelude)
+  (:export #:Color
+           #:color-mul
+           #:color-add))
+
+(cl:in-package #:ray/color)
+
+(coalton-toplevel
+  (define-struct Color
+    (r F64)
+    (g F64)
+    (b F64))
+  
+  (declare color-mul (Color * F64  -> Color))
+  (define (color-mul (Color r g b) v)
+    (Color (* r v) (* g v) (* b v)))
+  
+  (declare color-add (Color * Color  -> Color))
+  (define (color-add (Color r1 g1 b1) (Color r2 g2 b2))
+    (Color (+ r1 r2) (+ g1 g2) (+ b1 b2))))

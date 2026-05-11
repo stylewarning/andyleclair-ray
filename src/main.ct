@@ -1,29 +1,83 @@
 (cl:defpackage #:ray
-  (:use #:coalton #:coalton-prelude)
+  (:use #:coalton 
+        #:coalton-prelude)
   (:local-nicknames
     (#:file #:coalton/file)
     (#:it #:coalton/iterator)
-    (#:sh #:coalton/show)))
+    (#:math #:coalton/math)
+    (#:sh #:coalton/show)
+    (#:col #:ray/color)
+    (#:vec #:ray/vec3)
+    (#:r #:ray/ray)))
 
 (cl:in-package #:ray)
 
 (coalton-toplevel
-  (define-struct Color
-    (r Integer)
-    (g Integer)
-    (b Integer))
+  (declare *aspect-ratio* Fraction)
+  (define *aspect-ratio* (/ 16 9))
   
-  (define *red* (Color 255 0 0))
-  (define *green* (Color 0 255 0))
-  (define *blue* (Color 0 0 255))
+  (declare *width* Integer)
+  (define *width* 400)
   
-  (define *width* 256)
-  (define *height* 256)
+  (declare *height* Integer)
+  (define *height* (floor (/ (into *width*) *aspect-ratio*)))
+  
+  (declare *focal-length* F64)
+  (define *focal-length* 1.0d0)
+  
+  (declare *viewport-height* F64)
+  (define *viewport-height* 2.0d0)
+  
+  (declare *viewport-width* F64)
+  (define *viewport-width* (* *viewport-height* (/ (unwrap-as F64 *width*) (unwrap-as F64 *height*))))
+  
+  (declare *colors* Integer)
   (define *colors* 255)
   
-  (declare generate-pixels (Integer * Integer -> (List Color)))
-  (define (generate-pixels width height)
-    [(Color x y 0) :for x :below width :for y :below height])
+  (declare *camera-center* vec:Vec3)
+  (define *camera-center* (vec:Vec3 0.0d0 0.0d0 0.0d0))
+  
+  (declare *viewport-u* vec:Vec3)
+  (define *viewport-u* (vec:Vec3 *viewport-width* 0.0d0 0.0d0))
+  
+  (declare *viewport-v* vec:Vec3)
+  (define *viewport-v* (vec:Vec3 0.0d0 (negate *viewport-height*) 0.0d0))
+  
+  (declare *pixel-delta-u* vec:Vec3)
+  (define *pixel-delta-u* (vec:vec-div-scalar *viewport-u* (unwrap-as F64 *width*)))
+
+  (declare *pixel-delta-v* vec:Vec3)
+  (define *pixel-delta-v* (vec:vec-div-scalar *viewport-v* (unwrap-as F64 *height*)))
+  
+  (declare *viewport-upper-left* vec:Vec3)
+  (define *viewport-upper-left* (vec:vec-sub 
+                                  (vec:vec-sub 
+                                    (vec:vec-sub *camera-center* (vec:Vec3 0.0d0 0.0d0 *focal-length*)) 
+                                    (vec:vec-div-scalar *viewport-u* 2.0d0))
+                                  (vec:vec-div-scalar *viewport-v* 2.0d0)))
+  
+  (declare *pixel-00-loc* vec:Vec3)
+  (define *pixel-00-loc* (vec:vec-add *viewport-upper-left*
+                                      (vec:vec-mul-scalar (vec:vec-add *pixel-delta-u* *pixel-delta-v*) 0.5d0)))
+  
+  (declare ray-color (r:Ray -> col:Color))
+  (define (ray-color r)
+    (cond ((hit-sphere? (vec:Vec3 0.0d0 0.0d0 -1.0d0) 0.5d0 r) (col:Color 1.0d0 0.0d0 0.0d0))
+          (True 
+            (let unit-direction = (vec:unit-vector (.direction r)))
+            (let alpha = (* 0.5d0 (+ (.y unit-direction) 1.0d0)))
+            (col:color-add 
+              (col:color-mul (col:Color 1.0d0 1.0d0 1.0d0) (- 1.0d0 alpha))
+              (col:color-mul (col:Color 0.5d0 0.7d0 1.0d0) alpha)))))    
+
+  (declare hit-sphere? (vec:Vec3 * F64 * r:Ray -> Boolean))
+  (define (hit-sphere? center radius (r:Ray origin direction))
+    (let oc = (vec:vec-sub center origin))
+    (let a = (vec:vec-dot direction direction))
+    (let b = (* (vec:vec-dot direction oc) -2.0d0))
+    (let c = (- (vec:vec-dot oc oc) (* radius radius)))
+    (let discriminant = (- (^ b 2) (* 4 (* a c))))
+    (>= discriminant 0))
 
   (declare write-header (file:FileStream Char -> Void)) 
   (define (write-header stream)
@@ -31,26 +85,40 @@
       (cl:format stream "P3~%~D ~D~%~D~%" *width* *height* *colors*)
       (cl:values)))
   
-  (declare write-pixel (file:FileStream Char * Color -> Void))
-  (define (write-pixel stream pixel)
-    (let ((r (.r pixel))
-          (g (.g pixel))
-          (b (.b pixel)))
-      (lisp (-> Void) (stream r g b) 
-        (cl:format stream "~D ~D ~D~%" r g b)
-        (cl:values))))
+  (declare write-pixel (file:FileStream Char * col:Color -> Void))
+  (define (write-pixel stream (col:Color r g b))
+    (let rbyte = (floor (* 255.999d0 r)))
+    (let gbyte = (floor (* 255.999d0 g)))
+    (let bbyte = (floor (* 255.999d0 b)))
+    (lisp (-> Void) (stream rbyte gbyte bbyte) 
+      (cl:format stream "~D ~D ~D~%" rbyte gbyte bbyte)
+      (cl:values)))
   
-  (declare write-pixels (file:FileStream Char * (List Color) -> Void))
-  (define (write-pixels stream pixels)
-    (it:for-each! (fn (px) (write-pixel stream px)) (it:into-iter pixels)))
+  (declare pixel-center (Integer * Integer -> vec:Vec3))
+  (define (pixel-center i j)
+    (vec:vec-add *pixel-00-loc* 
+                 (vec:vec-add (vec:vec-mul-scalar *pixel-delta-u* (unwrap-as F64 i)) 
+                              (vec:vec-mul-scalar *pixel-delta-v* (unwrap-as F64 j)))))
+  
+  (declare write-pixels (file:FileStream Char -> Void))
+  (define (write-pixels stream)
+    (for* ((y 0 (1+ y)))
+         :repeat (unwrap-as UFix *height*)
+         (print (<> "Scanlines remaining: " (into (- *height* y))))
+         (for* ((x 0 (1+ x)))
+              :repeat (unwrap-as UFix *width*)
+              (let pixel-center = (pixel-center x y))
+              (let ray-direction = (vec:vec-sub pixel-center *camera-center*))
+              (let ray = (r:Ray *camera-center* ray-direction))
+              (let color = (ray-color ray))
+              (write-pixel stream color))))
   
   (declare save-image (Void -> (Result file:FileError UFix)))
   (define (save-image)
-    (let all-pixels = (generate-pixels *width* *height*))
     (file:with-open-file "out.ppm"
       (fn (stream)
         (write-header stream)
-        (write-pixels stream all-pixels)
+        (write-pixels stream)
         (Ok 0))
       :direction file::Output
       :if-exists file::Overwrite))
@@ -61,5 +129,6 @@
       ((Ok _) (show "Wrote file!"))
       ((Err errored)
         (match errored
-          ((file:FileError str) (show "File error: ") (show str))
-          (_None (show "Unknown error occurred")))))))
+          ((file:FileError str) (print "File error: ") 
+                                (print str))
+          (_None (print "Unknown error occurred")))))))

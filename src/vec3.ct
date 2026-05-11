@@ -1,0 +1,68 @@
+(cl:defpackage #:ray/vec3
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames (#:math #:coalton/math))
+  (:export #:Vec3
+           #:unit-vector
+           #:vec-length
+           #:vec-add
+           #:vec-add-scalar
+           #:vec-sub
+           #:vec-mul
+           #:vec-mul-scalar
+           #:vec-div-scalar
+           #:vec-dot))
+
+(cl:in-package #:ray/vec3)
+
+(coalton-toplevel
+  (define-struct Vec3
+    (x F64)
+    (y F64)
+    (z F64))
+  
+  (declare unit-vector (Vec3 -> Vec3))
+  (define (unit-vector v)
+    (vec-div-scalar v (vec-length v)))
+ 
+  (declare length-squared (Vec3 -> F64))
+  (define (length-squared (Vec3 x y z))
+    (+ (* x x) (+ (* y y) (* z z))))
+  
+  (declare vec-length (Vec3 -> F64))
+  (define (vec-length vec)
+    (math:sqrt (length-squared vec)))
+  
+  (declare vec-add (Vec3 * Vec3 -> Vec3))
+  (define (vec-add (Vec3 ux uy uz) (Vec3 vx vy vz))
+    "Adds two vectors together"
+    (Vec3 (+ ux vx) (+ uy vy) (+ uz vz)))
+  
+  (declare vec-add-scalar (Vec3 * F64 -> Vec3))
+  (define (vec-add-scalar (Vec3 x y z) t)
+    "Add a scalar to all fields of a vector"
+    (Vec3 (+ x t) (+ y t) (+ z t)))
+  
+  (declare vec-sub (Vec3 * Vec3 -> Vec3))
+  (define (vec-sub (Vec3 ux uy uz) (Vec3 vx vy vz))
+    "Subtract one vector from another"
+    (Vec3 (- ux vx) (- uy vy) (- uz vz)))
+  
+  (declare vec-mul (Vec3 * Vec3 -> Vec3))
+  (define (vec-mul (Vec3 ux uy uz) (Vec3 vx vy vz))
+    "Multiply two vectors together"
+    (Vec3 (* ux vx) (* uy vy) (* uz vz)))
+  
+  (declare vec-mul-scalar (Vec3 * F64 -> Vec3))
+  (define (vec-mul-scalar (Vec3 x y z) t)
+    "Multiply a vector by a scalar"
+    (Vec3 (* t x) (* t y) (* t z)))
+  
+  (declare vec-dot (Vec3 * Vec3 -> F64))
+  (define (vec-dot (Vec3 ux uy uz) (Vec3 vx vy vz))
+    "Compute the dot-product of two vectors"
+    (+ (* ux vx) (+ (* uy vy) (* uz vz))))
+  
+  (declare vec-div-scalar (Vec3 * F64 -> Vec3))
+  (define (vec-div-scalar vec t)
+    (vec-mul-scalar vec (/ 1.0d0 t))) 
+)
