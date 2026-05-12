@@ -8,7 +8,7 @@
     (#:math #:coalton/math)
     (#:sh #:coalton/show)
     (#:col #:ray/color)
-    (#:vec #:ray/vec3)
+    (#:v #:ray/vec3)
     (#:h #:ray/hittable)
     (#:r #:ray/ray)
     (#:s #:ray/sphere)))
@@ -25,6 +25,12 @@
   (declare IMAGE-HEIGHT Integer)
   (define IMAGE-HEIGHT (floor (/ (into IMAGE-WIDTH) ASPECT-RATIO)))
   
+  (declare SAMPLES-PER-PIXEL Integer)
+  (define SAMPLES-PER-PIXEL 10)
+    
+  (declare PIXEL-SAMPLES-SCALE F64)
+  (define PIXEL-SAMPLES-SCALE (/ 1.0d0 (unwrap-as F64 SAMPLES-PER-PIXEL)))
+  
   (declare FOCAL-LENGTH F64)
   (define FOCAL-LENGTH 1.0d0)
   
@@ -37,31 +43,31 @@
   (declare COLORS Integer)
   (define COLORS 255)
   
-  (declare CAMERA-CENTER vec:Vec3)
-  (define CAMERA-CENTER (vec:Vec3 0.0d0 0.0d0 0.0d0))
+  (declare CAMERA-CENTER v:Vec3)
+  (define CAMERA-CENTER (v:Vec3 0.0d0 0.0d0 0.0d0))
   
-  (declare VIEWPORT-U vec:Vec3)
-  (define VIEWPORT-U (vec:Vec3 VIEWPORT-WIDTH 0.0d0 0.0d0))
+  (declare VIEWPORT-U v:Vec3)
+  (define VIEWPORT-U (v:Vec3 VIEWPORT-WIDTH 0.0d0 0.0d0))
   
-  (declare VIEWPORT-V vec:Vec3)
-  (define VIEWPORT-V (vec:Vec3 0.0d0 (negate VIEWPORT-HEIGHT) 0.0d0))
+  (declare VIEWPORT-V v:Vec3)
+  (define VIEWPORT-V (v:Vec3 0.0d0 (negate VIEWPORT-HEIGHT) 0.0d0))
   
-  (declare PIXEL-DELTA-U vec:Vec3)
-  (define PIXEL-DELTA-U (vec:vec-div-scalar VIEWPORT-U (unwrap-as F64 IMAGE-WIDTH)))
+  (declare PIXEL-DELTA-U v:Vec3)
+  (define PIXEL-DELTA-U (v:vec-div-scalar VIEWPORT-U (unwrap-as F64 IMAGE-WIDTH)))
 
-  (declare PIXEL-DELTA-V vec:Vec3)
-  (define PIXEL-DELTA-V (vec:vec-div-scalar VIEWPORT-V (unwrap-as F64 IMAGE-HEIGHT)))
+  (declare PIXEL-DELTA-V v:Vec3)
+  (define PIXEL-DELTA-V (v:vec-div-scalar VIEWPORT-V (unwrap-as F64 IMAGE-HEIGHT)))
   
-  (declare VIEWPORT-UPPER-LEFT vec:Vec3)
-  (define VIEWPORT-UPPER-LEFT (vec:vec-sub 
-                                  (vec:vec-sub 
-                                    (vec:vec-sub CAMERA-CENTER (vec:Vec3 0.0d0 0.0d0 FOCAL-LENGTH)) 
-                                    (vec:vec-div-scalar VIEWPORT-U 2.0d0))
-                                  (vec:vec-div-scalar VIEWPORT-V 2.0d0)))
+  (declare VIEWPORT-UPPER-LEFT v:Vec3)
+  (define VIEWPORT-UPPER-LEFT (v:vec-sub 
+                                (v:vec-sub 
+                                  (v:vec-sub CAMERA-CENTER (v:Vec3 0.0d0 0.0d0 FOCAL-LENGTH)) 
+                                  (v:vec-div-scalar VIEWPORT-U 2.0d0))
+                                (v:vec-div-scalar VIEWPORT-V 2.0d0)))
   
-  (declare PIXEL-00-LOC vec:Vec3)
-  (define PIXEL-00-LOC (vec:vec-add VIEWPORT-UPPER-LEFT
-                                      (vec:vec-mul-scalar (vec:vec-add PIXEL-DELTA-U PIXEL-DELTA-V) 0.5d0)))
+  (declare PIXEL-00-LOC v:Vec3)
+  (define PIXEL-00-LOC (v:vec-add VIEWPORT-UPPER-LEFT
+                                      (v:vec-mul-scalar (v:vec-add PIXEL-DELTA-U PIXEL-DELTA-V) 0.5d0)))
   
   ; These must be structs that have an implementation of Hittable:hit?
   (define-type Hittable
@@ -70,11 +76,33 @@
   
   (declare WORLD (List s:Sphere))
   (define WORLD [
-    (s:Sphere (vec:Vec3 0.0d0 0.0d0 -1.0d0) 0.5d0)
-    (s:Sphere (vec:Vec3 0.0d0 -100.5d0 -1.0d0) 100.0d0)
+    (s:Sphere (v:Vec3 0.0d0 0.0d0 -1.0d0) 0.5d0)
+    (s:Sphere (v:Vec3 0.0d0 -100.5d0 -1.0d0) 100.0d0)
     ])
   
   (define INFINITY (the F64 math:infinity))
+  
+  (declare rand-f64 (Void -> F64))
+  (define (rand-f64)
+    (lisp (-> F64) () (cl:random 1.0d0)))
+  
+  (declare rand-f64-range (F64 * F64 -> F64))
+  (define (rand-f64-range min max)
+    (+ min (* (- max min) (rand-f64))))
+  
+  (declare get-ray (Integer * Integer -> r:Ray))
+  (define (get-ray i j)
+    "Construct a camera ray originating at the origin and directed at a randomly sampled point around pixel location (i,j)"
+    (let (v:Vec3 offset-x offset-y _) = (sample-square))
+    (let pixel-sample = (v:vec-add PIXEL-00-LOC
+                                   (v:vec-add
+                                     (v:vec-mul-scalar PIXEL-DELTA-U (+ (unwrap-as F64 i) offset-x))
+                                     (v:vec-mul-scalar PIXEL-DELTA-V (+ (unwrap-as F64 j) offset-y)))))
+    (let direction = (v:vec-sub pixel-sample CAMERA-CENTER))
+    (r:Ray CAMERA-CENTER direction))
+  
+  (define (sample-square)
+    (v:Vec3 (- (rand-f64) 0.5d0) (- (rand-f64) 0.5d0) 0.0d0))
   
   (declare hit-any? (r:Ray * F64 * F64 -> Optional h:HitRecord))
   (define (hit-any? ray tmin tmax)
@@ -91,20 +119,15 @@
   (declare ray-color (r:Ray -> col:Color))
   (define (ray-color r)
     (match (hit-any? r 0 INFINITY)
-      ((Some (h:HitRecord _ (vec:Vec3 nx ny nz) _ _))
+      ((Some (h:HitRecord _ (v:Vec3 nx ny nz) _ _))
         (col:color-mul (col:Color (+ nx 1.0d0) (+ ny 1.0d0) (+ nz 1.0d0)) 0.5d0))
       ((None)
-        (let unit-direction = (vec:unit-vector (.direction r)))
+        (let unit-direction = (v:unit-vector (.direction r)))
         (let alpha = (* 0.5d0 (+ (.y unit-direction) 1.0d0)))
         (col:color-add 
           (col:color-mul (col:Color 1.0d0 1.0d0 1.0d0) (- 1.0d0 alpha))
           (col:color-mul (col:Color 0.5d0 0.7d0 1.0d0) alpha)))))
 
-  (declare write-header (file:FileStream Char -> Void)) 
-  (define (write-header stream)
-    (lisp (-> Void) (stream)
-      (cl:format stream "P3~%~D ~D~%~D~%" IMAGE-WIDTH IMAGE-HEIGHT COLORS)
-      (cl:values)))
   
   (declare write-pixel (file:FileStream Char * col:Color -> Void))
   (define (write-pixel stream (col:Color r g b))
@@ -115,11 +138,11 @@
       (cl:format stream "~D ~D ~D~%" rbyte gbyte bbyte)
       (cl:values)))
   
-  (declare pixel-center (Integer * Integer -> vec:Vec3))
+  (declare pixel-center (Integer * Integer -> v:Vec3))
   (define (pixel-center i j)
-    (vec:vec-add PIXEL-00-LOC
-                 (vec:vec-add (vec:vec-mul-scalar PIXEL-DELTA-U (unwrap-as F64 i)) 
-                              (vec:vec-mul-scalar PIXEL-DELTA-V (unwrap-as F64 j)))))
+    (v:vec-add PIXEL-00-LOC
+                 (v:vec-add (v:vec-mul-scalar PIXEL-DELTA-U (unwrap-as F64 i)) 
+                            (v:vec-mul-scalar PIXEL-DELTA-V (unwrap-as F64 j)))))
   
   (declare write-pixels (file:FileStream Char -> Void))
   (define (write-pixels stream)
@@ -128,11 +151,21 @@
          (print (<> "Scanlines remaining: " (into (- IMAGE-HEIGHT y))))
          (for* ((x 0 (1+ x)))
               :repeat (unwrap-as UFix IMAGE-WIDTH)
-              (let pixel-center = (pixel-center x y))
-              (let ray-direction = (vec:vec-sub pixel-center CAMERA-CENTER))
-              (let ray = (r:Ray CAMERA-CENTER ray-direction))
-              (let color = (ray-color ray))
+               (let color = 
+                 (for ((sample 0 (1+ sample)) 
+                        (pixel-color (col:Color 0.0d0 0.0d0 0.0d0) 
+                                     (col:color-add pixel-color (ray-color (get-ray x y)))))
+                      :returns (col:color-mul pixel-color PIXEL-SAMPLES-SCALE)
+                      :repeat (unwrap-as UFix SAMPLES-PER-PIXEL)
+                      ))
               (write-pixel stream color))))
+  
+  
+  (declare write-header (file:FileStream Char -> Void)) 
+  (define (write-header stream)
+    (lisp (-> Void) (stream)
+      (cl:format stream "P3~%~D ~D~%~D~%" IMAGE-WIDTH IMAGE-HEIGHT COLORS)
+      (cl:values)))
   
   (declare save-image (Void -> (Result file:FileError UFix)))
   (define (save-image)
@@ -147,7 +180,7 @@
   (declare main (Void -> Void))
   (define (main)
     (match (save-image)
-      ((Ok _) (show "Wrote file!"))
+      ((Ok _) (print "Wrote file!"))
       ((Err errored)
         (match errored
           ((file:FileError str) (print "File error: ") 
