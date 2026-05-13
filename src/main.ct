@@ -26,7 +26,7 @@
   (define IMAGE-HEIGHT (floor (/ (into IMAGE-WIDTH) ASPECT-RATIO)))
   
   (declare SAMPLES-PER-PIXEL Integer)
-  (define SAMPLES-PER-PIXEL 10)
+  (define SAMPLES-PER-PIXEL 100)
     
   (declare PIXEL-SAMPLES-SCALE F64)
   (define PIXEL-SAMPLES-SCALE (/ 1.0d0 (unwrap-as F64 SAMPLES-PER-PIXEL)))
@@ -148,7 +148,7 @@
   (define (write-pixels stream)
     (for* ((y 0 (1+ y)))
          :repeat (unwrap-as UFix IMAGE-HEIGHT)
-         (print (<> "Scanlines remaining: " (into (- IMAGE-HEIGHT y))))
+         ; (print (<> "Scanlines remaining: " (into (- IMAGE-HEIGHT y))))
          (for* ((x 0 (1+ x)))
               :repeat (unwrap-as UFix IMAGE-WIDTH)
                (let color = 

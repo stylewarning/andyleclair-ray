@@ -1,6 +1,6 @@
 (cl:defpackage #:ray/vec3
   (:use #:coalton #:coalton-prelude)
-  (:local-nicknames (#:math #:coalton/math))
+  (:local-nicknames (#:math #:coalton/math))
   (:export #:Vec3
            #:unit-vector
            #:vec-length
