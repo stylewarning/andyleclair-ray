@@ -130,13 +130,18 @@
             (col:add 
               (col:mul (col:Color 1.0 1.0 1.0) (- 1.0 alpha))
               (col:mul (col:Color 0.5 0.7 1.0) alpha)))))))
-
+  
+  (declare linear-to-gamma (F32 -> F32))
+  (define (linear-to-gamma linear-comp)
+          (if (> 0 linear-comp)
+              0
+              (math:sqrt linear-comp)))
   
   (declare write-pixel (file:FileStream Char * col:Color -> Void))
   (define (write-pixel stream (col:Color r g b))
-    (let rbyte = (floor (* 255.999 r)))
-    (let gbyte = (floor (* 255.999 g)))
-    (let bbyte = (floor (* 255.999 b)))
+    (let rbyte = (floor (* 255.999 (linear-to-gamma r))))
+    (let gbyte = (floor (* 255.999 (linear-to-gamma g))))
+    (let bbyte = (floor (* 255.999 (linear-to-gamma b))))
     (lisp (-> Void) (stream rbyte gbyte bbyte) 
       (cl:format stream "~D ~D ~D~%" rbyte gbyte bbyte)
       (cl:values)))
