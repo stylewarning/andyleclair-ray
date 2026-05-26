@@ -5,6 +5,7 @@
            #:random
            #:random-within
            #:random-on-hemisphere
+           #:random-unit-vector
            #:unit-vector
            #:vec-length
            #:vec-length-squared

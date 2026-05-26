@@ -70,7 +70,7 @@
                                       (v:vec-mul-scalar (v:vec-add PIXEL-DELTA-U PIXEL-DELTA-V) 0.5)))
   
   (declare MAX_DEPTH UFix)
-  (define MAX_DEPTH 10)
+  (define MAX_DEPTH 50)
   
   (declare WORLD (List s:Sphere))
   (define WORLD [
@@ -120,9 +120,9 @@
     (cond 
       ((<= depth 0) (col:Color 0.0 0.0 0.0))
       (True
-        (match (hit-any? r 0 INFINITY)
+        (match (hit-any? r 0.0001 INFINITY)
           ((Some (h:HitRecord point normal _ _))
-            (let direction = (v:random-on-hemisphere normal))
+            (let direction = (v:vec-add (v:random-on-hemisphere normal) (v:random-unit-vector)))
             (col:mul (ray-color (r:Ray point direction) (- depth 1)) 0.5))
           ((None)
             (let unit-direction = (v:unit-vector (.direction r)))
