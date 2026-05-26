@@ -12,8 +12,8 @@
   (define-struct HitRecord
     (point v:Vec3)
     (normal v:Vec3)
-    (t F64)
+    (t F32)
     (front-face? Boolean))
 
   (define-class (Hittable :a)
-                (hit? "Does a ray cast through a scene intersect this thing?" (:a * r:Ray * F64 * F64 -> Optional HitRecord))))
+                (hit? "Does a ray cast through a scene intersect this thing?" (:a * r:Ray * F32 * F32 -> Optional HitRecord))))

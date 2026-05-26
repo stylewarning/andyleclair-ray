@@ -11,9 +11,8 @@
     (:origin vec:Vec3)
     (:direction vec:Vec3))
   
-  (declare ray-at (Ray * F64 -> vec:Vec3))
-  (define (ray-at ray t)
-    (vec:vec-add (.origin ray)
-             (vec:vec-mul-scalar (.direction ray) t)))
+  (declare ray-at (Ray * F32 -> vec:Vec3))
+  (define (ray-at (Ray origin direction) t)
+    (vec:vec-add origin (vec:vec-mul-scalar direction t)))
 )
 

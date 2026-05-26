@@ -2,6 +2,9 @@
   (:use #:coalton #:coalton-prelude)
   (:local-nicknames (#:math #:coalton/math))
   (:export #:Vec3
+           #:random
+           #:random-within
+           #:random-on-hemisphere
            #:unit-vector
            #:vec-length
            #:vec-length-squared
@@ -18,19 +21,43 @@
 
 (coalton-toplevel
   (define-struct Vec3
-    (x F64)
-    (y F64)
-    (z F64))
+    (x F32)
+    (y F32)
+    (z F32))
+  
+  (declare random (Void -> Vec3))
+  (define (random)
+    (Vec3 (rand-f32) (rand-f32) (rand-f32)))
+  
+  (declare random-within (F32 * F32 -> Vec3))
+  (define (random-within min max)
+    (Vec3 (rand-f32-range min max) (rand-f32-range min max) (rand-f32-range min max)))
+  
+  (declare random-unit-vector (Void -> Vec3))
+  (define (random-unit-vector)
+    (let p = (random-within -1.0 1.0))
+    (let lensq = (vec-length-squared p))
+    (if (and (> lensq 1.0e-45)
+             (<= lensq 1))
+        (vec-div-scalar p (math:sqrt lensq))
+        (random-unit-vector)))
+  
+  (declare random-on-hemisphere (Vec3 -> Vec3))
+  (define (random-on-hemisphere normal)
+    (let on-unit-sphere = (random-unit-vector))
+    (if (> (vec-dot on-unit-sphere normal) 0.0)
+        on-unit-sphere
+        (vec-negate on-unit-sphere)))
   
   (declare unit-vector (Vec3 -> Vec3))
   (define (unit-vector v)
     (vec-div-scalar v (vec-length v)))
  
-  (declare vec-length-squared (Vec3 -> F64))
+  (declare vec-length-squared (Vec3 -> F32))
   (define (vec-length-squared (Vec3 x y z))
     (+ (* x x) (+ (* y y) (* z z))))
   
-  (declare vec-length (Vec3 -> F64))
+  (declare vec-length (Vec3 -> F32))
   (define (vec-length vec)
     (math:sqrt (vec-length-squared vec)))
   
@@ -39,7 +66,7 @@
     "Adds two vectors together"
     (Vec3 (+ ux vx) (+ uy vy) (+ uz vz)))
   
-  (declare vec-add-scalar (Vec3 * F64 -> Vec3))
+  (declare vec-add-scalar (Vec3 * F32 -> Vec3))
   (define (vec-add-scalar (Vec3 x y z) t)
     "Add a scalar to all fields of a vector"
     (Vec3 (+ x t) (+ y t) (+ z t)))
@@ -54,21 +81,31 @@
     "Multiply two vectors together"
     (Vec3 (* ux vx) (* uy vy) (* uz vz)))
   
-  (declare vec-mul-scalar (Vec3 * F64 -> Vec3))
+  (declare vec-mul-scalar (Vec3 * F32 -> Vec3))
   (define (vec-mul-scalar (Vec3 x y z) t)
     "Multiply a vector by a scalar"
     (Vec3 (* t x) (* t y) (* t z)))
   
-  (declare vec-dot (Vec3 * Vec3 -> F64))
+  (declare vec-dot (Vec3 * Vec3 -> F32))
   (define (vec-dot (Vec3 ux uy uz) (Vec3 vx vy vz))
     "Compute the dot-product of two vectors"
     (+ (* ux vx) (+ (* uy vy) (* uz vz))))
   
-  (declare vec-div-scalar (Vec3 * F64 -> Vec3))
+  (declare vec-div-scalar (Vec3 * F32 -> Vec3))
   (define (vec-div-scalar vec t)
-    (vec-mul-scalar vec (/ 1.0d0 t)))
+    (vec-mul-scalar vec (/ 1.0 t)))
   
   (declare vec-negate (Vec3 -> Vec3))
   (define (vec-negate (Vec3 x y z))
     (Vec3 (negate x) (negate y) (negate z)))
+  
+  
+  (declare rand-f32 (Void -> F32))
+  (define (rand-f32)
+    (lisp (-> F32) () (cl:random 1.0)))
+  
+  (declare rand-f32-range (F32 * F32 -> F32))
+  (define (rand-f32-range min max)
+    (+ min (* (- max min) (rand-f32))))
+
 )

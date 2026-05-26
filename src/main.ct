@@ -28,83 +28,82 @@
   (declare SAMPLES-PER-PIXEL Integer)
   (define SAMPLES-PER-PIXEL 100)
     
-  (declare PIXEL-SAMPLES-SCALE F64)
-  (define PIXEL-SAMPLES-SCALE (/ 1.0d0 (unwrap-as F64 SAMPLES-PER-PIXEL)))
+  (declare PIXEL-SAMPLES-SCALE F32)
+  (define PIXEL-SAMPLES-SCALE (/ 1.0 (unwrap-as F32 SAMPLES-PER-PIXEL)))
   
-  (declare FOCAL-LENGTH F64)
-  (define FOCAL-LENGTH 1.0d0)
+  (declare FOCAL-LENGTH F32)
+  (define FOCAL-LENGTH 1.0)
   
-  (declare VIEWPORT-HEIGHT F64)
-  (define VIEWPORT-HEIGHT 2.0d0)
+  (declare VIEWPORT-HEIGHT F32)
+  (define VIEWPORT-HEIGHT 2.0)
   
-  (declare VIEWPORT-WIDTH F64)
-  (define VIEWPORT-WIDTH (* VIEWPORT-HEIGHT (/ (unwrap-as F64 IMAGE-WIDTH) (unwrap-as F64 IMAGE-HEIGHT))))
+  (declare VIEWPORT-WIDTH F32)
+  (define VIEWPORT-WIDTH (* VIEWPORT-HEIGHT (/ (unwrap-as F32 IMAGE-WIDTH) (unwrap-as F32 IMAGE-HEIGHT))))
   
   (declare COLORS Integer)
   (define COLORS 255)
   
   (declare CAMERA-CENTER v:Vec3)
-  (define CAMERA-CENTER (v:Vec3 0.0d0 0.0d0 0.0d0))
+  (define CAMERA-CENTER (v:Vec3 0.0 0.0 0.0))
   
   (declare VIEWPORT-U v:Vec3)
-  (define VIEWPORT-U (v:Vec3 VIEWPORT-WIDTH 0.0d0 0.0d0))
+  (define VIEWPORT-U (v:Vec3 VIEWPORT-WIDTH 0.0 0.0))
   
   (declare VIEWPORT-V v:Vec3)
-  (define VIEWPORT-V (v:Vec3 0.0d0 (negate VIEWPORT-HEIGHT) 0.0d0))
+  (define VIEWPORT-V (v:Vec3 0.0 (negate VIEWPORT-HEIGHT) 0.0))
   
   (declare PIXEL-DELTA-U v:Vec3)
-  (define PIXEL-DELTA-U (v:vec-div-scalar VIEWPORT-U (unwrap-as F64 IMAGE-WIDTH)))
+  (define PIXEL-DELTA-U (v:vec-div-scalar VIEWPORT-U (unwrap-as F32 IMAGE-WIDTH)))
 
   (declare PIXEL-DELTA-V v:Vec3)
-  (define PIXEL-DELTA-V (v:vec-div-scalar VIEWPORT-V (unwrap-as F64 IMAGE-HEIGHT)))
+  (define PIXEL-DELTA-V (v:vec-div-scalar VIEWPORT-V (unwrap-as F32 IMAGE-HEIGHT)))
   
   (declare VIEWPORT-UPPER-LEFT v:Vec3)
   (define VIEWPORT-UPPER-LEFT (v:vec-sub 
                                 (v:vec-sub 
-                                  (v:vec-sub CAMERA-CENTER (v:Vec3 0.0d0 0.0d0 FOCAL-LENGTH)) 
-                                  (v:vec-div-scalar VIEWPORT-U 2.0d0))
-                                (v:vec-div-scalar VIEWPORT-V 2.0d0)))
+                                  (v:vec-sub CAMERA-CENTER (v:Vec3 0.0 0.0 FOCAL-LENGTH)) 
+                                  (v:vec-div-scalar VIEWPORT-U 2.0))
+                                (v:vec-div-scalar VIEWPORT-V 2.0)))
   
   (declare PIXEL-00-LOC v:Vec3)
   (define PIXEL-00-LOC (v:vec-add VIEWPORT-UPPER-LEFT
-                                      (v:vec-mul-scalar (v:vec-add PIXEL-DELTA-U PIXEL-DELTA-V) 0.5d0)))
+                                      (v:vec-mul-scalar (v:vec-add PIXEL-DELTA-U PIXEL-DELTA-V) 0.5)))
   
-  ; These must be structs that have an implementation of Hittable:hit?
-  (define-type Hittable
-    "Any type that is Hittable, that is has an instance of the Hittable typeclass"
-    Sphere)
+  (declare MAX_DEPTH UFix)
+  (define MAX_DEPTH 10)
   
   (declare WORLD (List s:Sphere))
   (define WORLD [
-    (s:Sphere (v:Vec3 0.0d0 0.0d0 -1.0d0) 0.5d0)
-    (s:Sphere (v:Vec3 0.0d0 -100.5d0 -1.0d0) 100.0d0)
+    (s:Sphere (v:Vec3 0.0 0.0 -1.0) 0.5)
+    (s:Sphere (v:Vec3 0.0 -100.5 -1.0) 100.0)
     ])
   
-  (define INFINITY (the F64 math:infinity))
+  (define INFINITY (the F32 math:infinity))
   
-  (declare rand-f64 (Void -> F64))
-  (define (rand-f64)
-    (lisp (-> F64) () (cl:random 1.0d0)))
+  (declare rand-f32 (Void -> F32))
+  (define (rand-f32)
+    (lisp (-> F32) () (cl:random 1.0)))
   
-  (declare rand-f64-range (F64 * F64 -> F64))
-  (define (rand-f64-range min max)
-    (+ min (* (- max min) (rand-f64))))
+  (declare rand-f32-range (F32 * F32 -> F32))
+  (define (rand-f32-range min max)
+    (+ min (* (- max min) (rand-f32))))
   
   (declare get-ray (Integer * Integer -> r:Ray))
   (define (get-ray i j)
     "Construct a camera ray originating at the origin and directed at a randomly sampled point around pixel location (i,j)"
-    (let (v:Vec3 offset-x offset-y _) = (sample-square))
+    (let (values offset-x offset-y) = (sample-square))
     (let pixel-sample = (v:vec-add PIXEL-00-LOC
                                    (v:vec-add
-                                     (v:vec-mul-scalar PIXEL-DELTA-U (+ (unwrap-as F64 i) offset-x))
-                                     (v:vec-mul-scalar PIXEL-DELTA-V (+ (unwrap-as F64 j) offset-y)))))
+                                     (v:vec-mul-scalar PIXEL-DELTA-U (+ (unwrap-as F32 i) offset-x))
+                                     (v:vec-mul-scalar PIXEL-DELTA-V (+ (unwrap-as F32 j) offset-y)))))
     (let direction = (v:vec-sub pixel-sample CAMERA-CENTER))
     (r:Ray CAMERA-CENTER direction))
   
+  (declare sample-square (Void -> F32 * F32))
   (define (sample-square)
-    (v:Vec3 (- (rand-f64) 0.5d0) (- (rand-f64) 0.5d0) 0.0d0))
+    (values (- (rand-f32) 0.5) (- (rand-f32) 0.5)))
   
-  (declare hit-any? (r:Ray * F64 * F64 -> Optional h:HitRecord))
+  (declare hit-any? (r:Ray * F32 * F32 -> Optional h:HitRecord))
   (define (hit-any? ray tmin tmax)
     (let (Tuple closest-hit _) =
       (fold 
@@ -116,24 +115,28 @@
         WORLD))
     closest-hit)
   
-  (declare ray-color (r:Ray -> col:Color))
-  (define (ray-color r)
-    (match (hit-any? r 0 INFINITY)
-      ((Some (h:HitRecord _ (v:Vec3 nx ny nz) _ _))
-        (col:color-mul (col:Color (+ nx 1.0d0) (+ ny 1.0d0) (+ nz 1.0d0)) 0.5d0))
-      ((None)
-        (let unit-direction = (v:unit-vector (.direction r)))
-        (let alpha = (* 0.5d0 (+ (.y unit-direction) 1.0d0)))
-        (col:color-add 
-          (col:color-mul (col:Color 1.0d0 1.0d0 1.0d0) (- 1.0d0 alpha))
-          (col:color-mul (col:Color 0.5d0 0.7d0 1.0d0) alpha)))))
+  (declare ray-color (r:Ray * UFix -> col:Color))
+  (define (ray-color r depth)
+    (cond 
+      ((<= depth 0) (col:Color 0.0 0.0 0.0))
+      (True
+        (match (hit-any? r 0 INFINITY)
+          ((Some (h:HitRecord point normal _ _))
+            (let direction = (v:random-on-hemisphere normal))
+            (col:mul (ray-color (r:Ray point direction) (- depth 1)) 0.5))
+          ((None)
+            (let unit-direction = (v:unit-vector (.direction r)))
+            (let alpha = (* 0.5 (+ (.y unit-direction) 1.0)))
+            (col:add 
+              (col:mul (col:Color 1.0 1.0 1.0) (- 1.0 alpha))
+              (col:mul (col:Color 0.5 0.7 1.0) alpha)))))))
 
   
   (declare write-pixel (file:FileStream Char * col:Color -> Void))
   (define (write-pixel stream (col:Color r g b))
-    (let rbyte = (floor (* 255.999d0 r)))
-    (let gbyte = (floor (* 255.999d0 g)))
-    (let bbyte = (floor (* 255.999d0 b)))
+    (let rbyte = (floor (* 255.999 r)))
+    (let gbyte = (floor (* 255.999 g)))
+    (let bbyte = (floor (* 255.999 b)))
     (lisp (-> Void) (stream rbyte gbyte bbyte) 
       (cl:format stream "~D ~D ~D~%" rbyte gbyte bbyte)
       (cl:values)))
@@ -141,21 +144,21 @@
   (declare pixel-center (Integer * Integer -> v:Vec3))
   (define (pixel-center i j)
     (v:vec-add PIXEL-00-LOC
-                 (v:vec-add (v:vec-mul-scalar PIXEL-DELTA-U (unwrap-as F64 i)) 
-                            (v:vec-mul-scalar PIXEL-DELTA-V (unwrap-as F64 j)))))
+                 (v:vec-add (v:vec-mul-scalar PIXEL-DELTA-U (unwrap-as F32 i)) 
+                            (v:vec-mul-scalar PIXEL-DELTA-V (unwrap-as F32 j)))))
   
   (declare write-pixels (file:FileStream Char -> Void))
   (define (write-pixels stream)
     (for* ((y 0 (1+ y)))
          :repeat (unwrap-as UFix IMAGE-HEIGHT)
-         ; (print (<> "Scanlines remaining: " (into (- IMAGE-HEIGHT y))))
+         (print (<> "Scanlines remaining: " (into (- IMAGE-HEIGHT y))))
          (for* ((x 0 (1+ x)))
               :repeat (unwrap-as UFix IMAGE-WIDTH)
                (let color = 
                  (for ((sample 0 (1+ sample)) 
-                        (pixel-color (col:Color 0.0d0 0.0d0 0.0d0) 
-                                     (col:color-add pixel-color (ray-color (get-ray x y)))))
-                      :returns (col:color-mul pixel-color PIXEL-SAMPLES-SCALE)
+                        (pixel-color (col:Color 0.0 0.0 0.0) 
+                                     (col:add pixel-color (ray-color (get-ray x y) MAX_DEPTH))))
+                      :returns (col:mul pixel-color PIXEL-SAMPLES-SCALE)
                       :repeat (unwrap-as UFix SAMPLES-PER-PIXEL)
                       ))
               (write-pixel stream color))))
