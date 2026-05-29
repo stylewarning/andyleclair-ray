@@ -13,7 +13,7 @@
 
 (coalton-toplevel
   (define-type Material
-    (Metal c:Color)
+    (Metal c:Color F32)
     (Lambertian c:Color)
     (Dielectric F32))
   
@@ -25,15 +25,19 @@
         (values (Some (r:Ray point normal)) albedo)
         (values (Some (r:Ray point scatter-direction)) albedo)))
   
-  (declare scatter-metal (v:Vec3 * v:Vec3 * v:Vec3 * c:Color -> Optional r:Ray * c:Color))
-  (define (scatter-metal direction point normal albedo)
+  (declare scatter-metal (v:Vec3 * v:Vec3 * v:Vec3 * c:Color * F32 -> Optional r:Ray * c:Color))
+  (define (scatter-metal direction point normal albedo fuzz)
     (let reflected = (v:reflect direction normal))
-    (values (Some (r:Ray point reflected)) albedo))
+    (let re-reflected = (v:vec-add (v:unit-vector reflected)
+                                   (v:vec-mul-scalar (v:random-unit-vector) fuzz)))
+    (if (> (v:vec-dot re-reflected normal) 0)
+        (values (Some (r:Ray point re-reflected)) albedo)
+        (values None (c:black))))
   
   (declare scatter (r:Ray * v:Vec3 * v:Vec3 * Material -> Optional r:Ray * c:Color))
   (define (scatter (r:Ray _ direction) point normal material)
     (match material
       ((Lambertian albedo) (scatter-lambertian point normal albedo))
-      ((Metal albedo) (scatter-metal direction point normal albedo))
-      (_ (values None (c:Color 0.0 0.0 0.0)))))
+      ((Metal albedo fuzz) (scatter-metal direction point normal albedo fuzz))
+      (_ (values None (c:black)))))
 )

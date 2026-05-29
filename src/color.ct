@@ -1,6 +1,7 @@
 (cl:defpackage #:ray/color
   (:use #:coalton #:coalton-prelude)
   (:export #:Color
+           #:black
            #:mul
            #:mul-scalar
            #:add))
@@ -12,6 +13,9 @@
     (r F32)
     (g F32)
     (b F32))
+  
+  (declare black (Void -> Color))
+  (define (black) (Color 0.0 0.0 0.0))
   
   (declare mul (Color * Color  -> Color))
   (define (mul (Color r g b) (Color r2 g2 b2))

@@ -80,9 +80,9 @@
     ; Center
     (s:Sphere (v:Vec3 0.0 0.0 -1.2) 0.5 (m:Lambertian (c:Color 0.1 0.2 0.5)))
     ; Left
-    (s:Sphere (v:Vec3 -1.0 0.0 -1.0) 0.5 (m:Metal (c:Color 0.8 0.8 0.8)))
+    (s:Sphere (v:Vec3 -1.0 0.0 -1.0) 0.5 (m:Metal (c:Color 0.8 0.8 0.8) 0.3))
     ; Right
-    (s:Sphere (v:Vec3 1.0 0.0 -1.0) 0.5 (m:Metal (c:Color 0.8 0.6 0.2)))
+    (s:Sphere (v:Vec3 1.0 0.0 -1.0) 0.5 (m:Metal (c:Color 0.8 0.6 0.2) 1.0))
   ])
   
   (define INFINITY (the F32 math:infinity))
@@ -125,7 +125,7 @@
   (declare ray-color (r:Ray * UFix -> c:Color))
   (define (ray-color r depth)
     (cond 
-      ((<= depth 0) (c:Color 0.0 0.0 0.0))
+      ((<= depth 0) (c:black))
       (True
         (match (hit-any? r 0.001 INFINITY)
           ((Some (h:HitRecord point normal _ _ material))
@@ -171,7 +171,7 @@
               :repeat (unwrap-as UFix IMAGE-WIDTH)
                (let color = 
                  (for ((sample 0 (1+ sample)) 
-                        (pixel-color (c:Color 0.0 0.0 0.0) 
+                        (pixel-color (c:black) 
                                      (c:add pixel-color (ray-color (get-ray x y) MAX_DEPTH))))
                       :returns (c:mul-scalar pixel-color PIXEL-SAMPLES-SCALE)
                       :repeat (unwrap-as UFix SAMPLES-PER-PIXEL)
