@@ -1,0 +1,39 @@
+(cl:defpackage #:ray/material
+               (:use #:coalton #:coalton-prelude)
+               (:local-nicknames (#:v #:ray/vec3)
+                                 (#:r #:ray/ray)
+                                 (#:c #:ray/color))
+               (:export #:Material
+                        #:Lambertian
+                        #:Metal
+                        #:Dielectric
+                        #:scatter))
+
+(cl:in-package #:ray/material)
+
+(coalton-toplevel
+  (define-type Material
+    (Metal c:Color)
+    (Lambertian c:Color)
+    (Dielectric F32))
+  
+  (declare scatter-lambertian (v:Vec3 * v:Vec3 * c:Color -> Optional r:Ray * c:Color))
+  (define (scatter-lambertian point normal albedo)
+    (let scatter-direction = (v:vec-add normal (v:random-unit-vector)))
+    (if (v:near-zero? scatter-direction)
+        ; Catch degenerate scatter case
+        (values (Some (r:Ray point normal)) albedo)
+        (values (Some (r:Ray point scatter-direction)) albedo)))
+  
+  (declare scatter-metal (v:Vec3 * v:Vec3 * v:Vec3 * c:Color -> Optional r:Ray * c:Color))
+  (define (scatter-metal direction point normal albedo)
+    (let reflected = (v:reflect direction normal))
+    (values (Some (r:Ray point reflected)) albedo))
+  
+  (declare scatter (r:Ray * v:Vec3 * v:Vec3 * Material -> Optional r:Ray * c:Color))
+  (define (scatter (r:Ray _ direction) point normal material)
+    (match material
+      ((Lambertian albedo) (scatter-lambertian point normal albedo))
+      ((Metal albedo) (scatter-metal direction point normal albedo))
+      (_ (values None (c:Color 0.0 0.0 0.0)))))
+)

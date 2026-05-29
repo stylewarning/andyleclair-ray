@@ -8,6 +8,7 @@
     (:ct-file "color")
     (:ct-file "vec3")
     (:ct-file "ray")
+    (:ct-file "material")
     (:ct-file "hittable")
     (:ct-file "sphere")
     (:ct-file "main")

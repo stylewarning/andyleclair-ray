@@ -2,7 +2,7 @@
   (:use #:coalton #:coalton-prelude)
   (:local-nicknames (#:vec #:ray/vec3))
   (:export #:Ray
-           #:ray-at))
+           #:ray-at))
 
 (cl:in-package #:ray/ray)
 
@@ -15,4 +15,3 @@
   (define (ray-at (Ray origin direction) t)
     (vec:vec-add origin (vec:vec-mul-scalar direction t)))
 )
-

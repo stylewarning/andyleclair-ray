@@ -1,7 +1,8 @@
 (cl:defpackage #:ray/hittable
                (:use #:coalton #:coalton-prelude)
                (:local-nicknames (#:r #:ray/ray)
-                                 (#:v #:ray/vec3))
+                                 (#:v #:ray/vec3)
+                                 (#:m #:ray/material))
                (:export #:Hittable
                         #:HitRecord
                         #:hit?))
@@ -13,7 +14,8 @@
     (point v:Vec3)
     (normal v:Vec3)
     (t F32)
-    (front-face? Boolean))
+    (front-face? Boolean)
+    (material m:Material))
 
   (define-class (Hittable :a)
                 (hit? "Does a ray cast through a scene intersect this thing?" (:a * r:Ray * F32 * F32 -> Optional HitRecord))))

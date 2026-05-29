@@ -6,6 +6,8 @@
            #:random-within
            #:random-on-hemisphere
            #:random-unit-vector
+           #:reflect
+           #:near-zero?
            #:unit-vector
            #:vec-length
            #:vec-length-squared
@@ -49,6 +51,15 @@
     (if (> (vec-dot on-unit-sphere normal) 0.0)
         on-unit-sphere
         (vec-negate on-unit-sphere)))
+  
+  (declare reflect (Vec3 * Vec3 -> Vec3))
+  (define (reflect v n)
+    (vec-sub v (vec-mul-scalar n (* (vec-dot v n) 2))))
+  
+  (declare near-zero? (Vec3 -> Boolean))
+  (define (near-zero? (Vec3 x y z))
+    (let a = 1.0e-8)
+    (and (< x a) (< y a) (< z a)))
   
   (declare unit-vector (Vec3 -> Vec3))
   (define (unit-vector v)

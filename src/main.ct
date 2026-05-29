@@ -7,11 +7,12 @@
     (#:list #:coalton/list)
     (#:math #:coalton/math)
     (#:sh #:coalton/show)
-    (#:col #:ray/color)
+    (#:c #:ray/color)
     (#:v #:ray/vec3)
     (#:h #:ray/hittable)
     (#:r #:ray/ray)
-    (#:s #:ray/sphere)))
+    (#:s #:ray/sphere)
+    (#:m #:ray/material)))
 
 (cl:in-package #:ray)
 
@@ -74,9 +75,15 @@
   
   (declare WORLD (List s:Sphere))
   (define WORLD [
-    (s:Sphere (v:Vec3 0.0 0.0 -1.0) 0.5)
-    (s:Sphere (v:Vec3 0.0 -100.5 -1.0) 100.0)
-    ])
+    ; Big ass world sphere
+    (s:Sphere (v:Vec3 0.0 -100.5 -1.0) 100.0 (m:Lambertian (c:Color 0.8 0.8 0.0)))
+    ; Center
+    (s:Sphere (v:Vec3 0.0 0.0 -1.2) 0.5 (m:Lambertian (c:Color 0.1 0.2 0.5)))
+    ; Left
+    (s:Sphere (v:Vec3 -1.0 0.0 -1.0) 0.5 (m:Metal (c:Color 0.8 0.8 0.8)))
+    ; Right
+    (s:Sphere (v:Vec3 1.0 0.0 -1.0) 0.5 (m:Metal (c:Color 0.8 0.6 0.2)))
+  ])
   
   (define INFINITY (the F32 math:infinity))
   
@@ -115,21 +122,24 @@
         WORLD))
     closest-hit)
   
-  (declare ray-color (r:Ray * UFix -> col:Color))
+  (declare ray-color (r:Ray * UFix -> c:Color))
   (define (ray-color r depth)
     (cond 
-      ((<= depth 0) (col:Color 0.0 0.0 0.0))
+      ((<= depth 0) (c:Color 0.0 0.0 0.0))
       (True
-        (match (hit-any? r 0.0001 INFINITY)
-          ((Some (h:HitRecord point normal _ _))
-            (let direction = (v:vec-add (v:random-on-hemisphere normal) (v:random-unit-vector)))
-            (col:mul (ray-color (r:Ray point direction) (- depth 1)) 0.5))
+        (match (hit-any? r 0.001 INFINITY)
+          ((Some (h:HitRecord point normal _ _ material))
+            (let (values maybe-ray attenuation) = (m:scatter r point normal material))
+            (match maybe-ray
+                   ((Some scatter-ray) (c:mul attenuation (ray-color scatter-ray (1- depth))))
+                   ; We return 0,0,0 in the None case
+                   ((None) attenuation)))
           ((None)
-            (let unit-direction = (v:unit-vector (.direction r)))
-            (let alpha = (* 0.5 (+ (.y unit-direction) 1.0)))
-            (col:add 
-              (col:mul (col:Color 1.0 1.0 1.0) (- 1.0 alpha))
-              (col:mul (col:Color 0.5 0.7 1.0) alpha)))))))
+            (let (v:Vec3 _ y _) = (v:unit-vector (.direction r)))
+            (let alpha = (* 0.5 (+ y 1.0)))
+            (c:add 
+              (c:mul-scalar (c:Color 1.0 1.0 1.0) (- 1.0 alpha))
+              (c:mul-scalar (c:Color 0.5 0.7 1.0) alpha)))))))
   
   (declare linear-to-gamma (F32 -> F32))
   (define (linear-to-gamma linear-comp)
@@ -137,8 +147,8 @@
               0
               (math:sqrt linear-comp)))
   
-  (declare write-pixel (file:FileStream Char * col:Color -> Void))
-  (define (write-pixel stream (col:Color r g b))
+  (declare write-pixel (file:FileStream Char * c:Color -> Void))
+  (define (write-pixel stream (c:Color r g b))
     (let rbyte = (floor (* 255.999 (linear-to-gamma r))))
     (let gbyte = (floor (* 255.999 (linear-to-gamma g))))
     (let bbyte = (floor (* 255.999 (linear-to-gamma b))))
@@ -161,9 +171,9 @@
               :repeat (unwrap-as UFix IMAGE-WIDTH)
                (let color = 
                  (for ((sample 0 (1+ sample)) 
-                        (pixel-color (col:Color 0.0 0.0 0.0) 
-                                     (col:add pixel-color (ray-color (get-ray x y) MAX_DEPTH))))
-                      :returns (col:mul pixel-color PIXEL-SAMPLES-SCALE)
+                        (pixel-color (c:Color 0.0 0.0 0.0) 
+                                     (c:add pixel-color (ray-color (get-ray x y) MAX_DEPTH))))
+                      :returns (c:mul-scalar pixel-color PIXEL-SAMPLES-SCALE)
                       :repeat (unwrap-as UFix SAMPLES-PER-PIXEL)
                       ))
               (write-pixel stream color))))

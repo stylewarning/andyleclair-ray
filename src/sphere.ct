@@ -2,7 +2,8 @@
                (:use #:coalton #:coalton-prelude)
                (:local-nicknames (#:v #:ray/vec3)
                                  (#:h #:ray/hittable)
-                                 (#:r #:ray/ray))
+                                 (#:r #:ray/ray)
+                                 (#:m #:ray/material))
                (:export #:Sphere))
 
 (cl:in-package #:ray/sphere)
@@ -10,10 +11,11 @@
 (coalton-toplevel
   (define-struct Sphere
     (center v:Vec3)
-    (radius F32))
+    (radius F32)
+    (material m:Material))
   
   (define-instance (h:Hittable Sphere)
-    (define (h:hit? (Sphere center radius) ray tmin tmax)
+    (define (h:hit? (Sphere center radius material) ray tmin tmax)
       (let (r:Ray origin direction) = ray)
       (let oc = (v:vec-sub center origin))
       (let a = (v:vec-length-squared direction))
@@ -33,5 +35,5 @@
                       (let outward-normal = (v:vec-div-scalar (v:vec-sub point center) radius))
                       (let front-face = (< (v:vec-dot direction outward-normal) 0))
                       (let normal = (if front-face outward-normal (v:vec-negate outward-normal)))
-                      (Some (h:HitRecord point normal minus-root front-face))))))))
+                      (Some (h:HitRecord point normal minus-root front-face material))))))))
 )
