@@ -2,11 +2,14 @@
   (:use #:coalton #:coalton-prelude)
   (:export #:Color
            #:black
+           #:white
            #:mul
            #:mul-scalar
            #:add))
 
 (cl:in-package #:ray/color)
+
+(cl:declaim (cl:optimize (cl:speed 3) (cl:safety 0) (cl:debug 0)))
 
 (coalton-toplevel
   (define-struct Color
@@ -16,6 +19,9 @@
   
   (declare black (Void -> Color))
   (define (black) (Color 0.0 0.0 0.0))
+  
+  (declare white (Void -> Color))
+  (define (white) (Color 1.0 1.0 1.0))
   
   (declare mul (Color * Color  -> Color))
   (define (mul (Color r g b) (Color r2 g2 b2))

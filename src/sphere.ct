@@ -8,6 +8,8 @@
 
 (cl:in-package #:ray/sphere)
 
+(cl:declaim (cl:optimize (cl:speed 3) (cl:safety 0) (cl:debug 0)))
+
 (coalton-toplevel
   (define-struct Sphere
     (center v:Vec3)

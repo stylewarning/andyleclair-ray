@@ -16,6 +16,8 @@
 
 (cl:in-package #:ray)
 
+(cl:declaim (cl:optimize (cl:speed 3) (cl:safety 0) (cl:debug 0)))
+
 (coalton-toplevel
   (declare ASPECT-RATIO Fraction)
   (define ASPECT-RATIO (/ 16 9))
@@ -80,7 +82,9 @@
     ; Center
     (s:Sphere (v:Vec3 0.0 0.0 -1.2) 0.5 (m:Lambertian (c:Color 0.1 0.2 0.5)))
     ; Left
-    (s:Sphere (v:Vec3 -1.0 0.0 -1.0) 0.5 (m:Metal (c:Color 0.8 0.8 0.8) 0.3))
+    (s:Sphere (v:Vec3 -1.0 0.0 -1.0) 0.5 (m:Dielectric 1.50))
+    ; Bubble
+    (s:Sphere (v:Vec3 -1.0 0.0 -1.0) 0.4 (m:Dielectric (/ 1.0 1.50)))
     ; Right
     (s:Sphere (v:Vec3 1.0 0.0 -1.0) 0.5 (m:Metal (c:Color 0.8 0.6 0.2) 1.0))
   ])
@@ -128,8 +132,8 @@
       ((<= depth 0) (c:black))
       (True
         (match (hit-any? r 0.001 INFINITY)
-          ((Some (h:HitRecord point normal _ _ material))
-            (let (values maybe-ray attenuation) = (m:scatter r point normal material))
+          ((Some (h:HitRecord point normal _ front-face? material))
+            (let (values maybe-ray attenuation) = (m:scatter r point normal front-face? material))
             (match maybe-ray
                    ((Some scatter-ray) (c:mul attenuation (ray-color scatter-ray (1- depth))))
                    ; We return 0,0,0 in the None case
