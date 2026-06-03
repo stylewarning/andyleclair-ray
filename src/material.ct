@@ -16,9 +16,9 @@
 
 (coalton-toplevel
   (define-type Material
-    (Metal c:Color F32)
+    (Metal c:Color F64)
     (Lambertian c:Color)
-    (Dielectric F32))
+    (Dielectric F64))
   
   (declare scatter-lambertian (v:Vec3 * v:Vec3 * c:Color -> Optional r:Ray * c:Color))
   (define (scatter-lambertian point normal albedo)
@@ -28,7 +28,7 @@
         (values (Some (r:Ray point normal)) albedo)
         (values (Some (r:Ray point scatter-direction)) albedo)))
   
-  (declare scatter-metal (v:Vec3 * v:Vec3 * v:Vec3 * c:Color * F32 -> Optional r:Ray * c:Color))
+  (declare scatter-metal (v:Vec3 * v:Vec3 * v:Vec3 * c:Color * F64 -> Optional r:Ray * c:Color))
   (define (scatter-metal direction point normal albedo fuzz)
     (let reflected = (v:reflect direction normal))
     (let re-reflected = (v:vec-add (v:unit-vector reflected)
@@ -37,28 +37,30 @@
         (values (Some (r:Ray point re-reflected)) albedo)
         (values None (c:black))))
   
-  (declare scatter-dielectric (v:Vec3 * v:Vec3 * v:Vec3 * Boolean * F32 -> Optional r:Ray * c:Color))
+  (declare scatter-dielectric (v:Vec3 * v:Vec3 * v:Vec3 * Boolean * F64 -> Optional r:Ray * c:Color))
   (define (scatter-dielectric direction point normal front-face? refraction-index)
-    (let ri = (if front-face? (/ 1.0 refraction-index) refraction-index))
+    (let ri = (if front-face? (/ 1.0d0 refraction-index) refraction-index))
     (let unit-direction = (v:unit-vector direction))
-    (let cos-theta = (min (v:vec-dot (v:vec-negate unit-direction) normal) 1.0))
-    (let sin-theta = (math:sqrt (- 1.0 (^ cos-theta 2))))
+    (let cos-theta = (min (v:vec-dot (v:vec-negate unit-direction) normal) 1.0d0))
+    (let sin-theta = (math:sqrt (- 1.0d0 (^ cos-theta 2))))
+    (let cannot-refract = (> (* ri sin-theta) 1.0d0))
     ; If the material cannot refract it must reflect
-    (let direction = (if (or (> (* ri sin-theta) 1.0) 
+    (let direction = (if (or cannot-refract 
                              (> (reflectance cos-theta ri) (rand-f32)))
                          (v:reflect unit-direction normal)
                          (v:refract unit-direction normal ri)))
     (values (Some (r:Ray point direction)) (c:white)))
   
-  (declare reflectance (F32 * F32 -> F32))
+  (declare reflectance (F64 * F64 -> F64))
   (define (reflectance cosine refraction-index)
     "Ye olde Schlick approximation for reflectance"
-    (let r0 = (^ (/ (- 1.0 refraction-index) (+ 1.0 refraction-index)) 2))
-    (+ r0 (* (- 1.0 r0) (^ (- 1.0 cosine) 5))))
+    (let r0 = (/ (- 1.0d0 refraction-index) (+ 1.0d0 refraction-index)))
+    (let r0-sq = (* r0 r0))
+    (+ r0-sq (* (- 1.0d0 r0-sq) (^ (- 1.0d0 cosine) 5))))
   
-  (declare rand-f32 (Void -> F32))
+  (declare rand-f32 (Void -> F64))
   (define (rand-f32)
-    (lisp (-> F32) () (cl:random 1.0)))
+    (lisp (-> F64) () (cl:random 1.0d0)))
   
   (declare scatter (r:Ray * v:Vec3 * v:Vec3 * Boolean * Material -> Optional r:Ray * c:Color))
   (define (scatter (r:Ray _ direction) point normal front-face? material)
