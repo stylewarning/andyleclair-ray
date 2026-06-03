@@ -6,6 +6,7 @@
            #:random-within
            #:random-on-hemisphere
            #:random-unit-vector
+           #:random-in-unit-disk
            #:reflect
            #:refract
            #:near-zero?
@@ -34,11 +35,11 @@
   
   (declare random (Void -> Vec3))
   (define (random)
-    (Vec3 (rand-f32) (rand-f32) (rand-f32)))
+    (Vec3 (rand-f64) (rand-f64) (rand-f64)))
   
   (declare random-within (F64 * F64 -> Vec3))
   (define (random-within min max)
-    (Vec3 (rand-f32-range min max) (rand-f32-range min max) (rand-f32-range min max)))
+    (Vec3 (rand-f64-range min max) (rand-f64-range min max) (rand-f64-range min max)))
   
   (declare random-unit-vector (Void -> Vec3))
   (define (random-unit-vector)
@@ -58,7 +59,7 @@
   
   (declare random-in-unit-disk (Void -> Vec3))
   (define (random-in-unit-disk)
-    (let p = (Vec3 (rand-f32-range -1.0d0 1.0d0) (rand-f32-range -1.0d0 1.0d0) 0.0d0))
+    (let p = (Vec3 (rand-f64-range -1.0d0 1.0d0) (rand-f64-range -1.0d0 1.0d0) 0.0d0))
     (if (< (vec-length-squared p) 1.0d0)
         p
         (random-in-unit-disk)))
@@ -139,12 +140,12 @@
     (Vec3 (negate x) (negate y) (negate z)))
   
   
-  (declare rand-f32 (Void -> F64))
-  (define (rand-f32)
+  (declare rand-f64 (Void -> F64))
+  (define (rand-f64)
     (lisp (-> F64) () (cl:random 1.0d0)))
   
-  (declare rand-f32-range (F64 * F64 -> F64))
-  (define (rand-f32-range min max)
-    (+ min (* (- max min) (rand-f32))))
+  (declare rand-f64-range (F64 * F64 -> F64))
+  (define (rand-f64-range min max)
+    (+ min (* (- max min) (rand-f64))))
 
 )

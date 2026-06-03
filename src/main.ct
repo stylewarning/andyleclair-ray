@@ -35,8 +35,14 @@
   (declare PIXEL-SAMPLES-SCALE F64)
   (define PIXEL-SAMPLES-SCALE (/ 1.0d0 (unwrap-as F64 SAMPLES-PER-PIXEL)))
   
-  (declare VFOV UFix)
-  (define VFOV 20)
+  (declare VFOV F64)
+  (define VFOV 20.0d0)
+  
+  (declare DEFOCUS-ANGLE F64)
+  (define DEFOCUS-ANGLE 10.0d0)
+  
+  (declare FOCUS-DIST F64)
+  (define FOCUS-DIST 3.4d0)
   
   (declare LOOK-FROM v:Vec3)
   (define LOOK-FROM (v:Vec3 -2.0d0 2.0d0 0.0d0))
@@ -55,7 +61,7 @@
   (define V (v:vec-cross W U))
   
   (declare VIEWPORT-HEIGHT F64)
-  (define VIEWPORT-HEIGHT (* 2.0d0 (* (trig:tan (/ (deg-to-rad VFOV) 2.0d0)) FOCAL-LENGTH)))
+  (define VIEWPORT-HEIGHT (* 2.0d0 (* (trig:tan (/ (deg-to-rad VFOV) 2.0d0)) FOCUS-DIST)))
   
   (declare VIEWPORT-WIDTH F64)
   (define VIEWPORT-WIDTH (* VIEWPORT-HEIGHT (/ (unwrap-as F64 IMAGE-WIDTH) (unwrap-as F64 IMAGE-HEIGHT))))
@@ -81,21 +87,24 @@
   (declare VIEWPORT-UPPER-LEFT v:Vec3)
   (define VIEWPORT-UPPER-LEFT (v:vec-sub 
                                 (v:vec-sub 
-                                  (v:vec-sub CAMERA-CENTER (v:vec-mul-scalar W FOCAL-LENGTH)) 
+                                  (v:vec-sub CAMERA-CENTER (v:vec-mul-scalar W FOCUS-DIST)) 
                                   (v:vec-div-scalar VIEWPORT-U 2.0d0))
                                 (v:vec-div-scalar VIEWPORT-V 2.0d0)))
   
   (declare PIXEL-00-LOC v:Vec3)
   (define PIXEL-00-LOC (v:vec-add VIEWPORT-UPPER-LEFT
                                       (v:vec-mul-scalar (v:vec-add PIXEL-DELTA-U PIXEL-DELTA-V) 0.5d0)))
+  
+  (define DEFOCUS-RADIUS (* FOCUS-DIST (trig:tan (deg-to-rad (/ DEFOCUS-ANGLE 2.0d0)))))
+  
+  (define DEFOCUS-DISK-U (v:vec-mul-scalar U DEFOCUS-RADIUS))
+  (define DEFOCUS-DISK-V (v:vec-mul-scalar V DEFOCUS-RADIUS))
 
   (declare INFINITY F64)
   (define INFINITY (the F64 math:infinity))
   
   (declare MAX_DEPTH UFix)
   (define MAX_DEPTH 50)
-  
-
   
   (declare WORLD (List s:Sphere))
   (define WORLD [
@@ -120,17 +129,17 @@
     (s:Sphere (v:Vec3 R 0 -1) R (m:Lambertian (c:Color 1.0d0 0.0d0 0.0d0)))
   ])
 
-  (declare deg-to-rad (UFix -> F64))
+  (declare deg-to-rad (F64 -> F64))
   (define (deg-to-rad degrees)
-    (* (unwrap-as F64 degrees) (/ (the F64 coalton/math/elementary:pi) 180.0d0)))
+    (* degrees (/ (the F64 coalton/math/elementary:pi) 180.0d0)))
   
-  (declare rand-f32 (Void -> F64))
-  (define (rand-f32)
+  (declare rand-f64 (Void -> F64))
+  (define (rand-f64)
     (lisp (-> F64) () (cl:random 1.0d0)))
   
-  (declare rand-f32-range (F64 * F64 -> F64))
-  (define (rand-f32-range min max)
-    (+ min (* (- max min) (rand-f32))))
+  (declare rand-f64-range (F64 * F64 -> F64))
+  (define (rand-f64-range min max)
+    (+ min (* (- max min) (rand-f64))))
   
   (declare get-ray (Integer * Integer -> r:Ray))
   (define (get-ray i j)
@@ -140,12 +149,21 @@
                                    (v:vec-add
                                      (v:vec-mul-scalar PIXEL-DELTA-U (+ (unwrap-as F64 i) offset-x))
                                      (v:vec-mul-scalar PIXEL-DELTA-V (+ (unwrap-as F64 j) offset-y)))))
-    (let direction = (v:vec-sub pixel-sample CAMERA-CENTER))
-    (r:Ray CAMERA-CENTER direction))
+    (let ray-origin = (if (<= DEFOCUS-ANGLE 0)
+                          CAMERA-CENTER
+                          (defocus-disk-sample)))
+    (let direction = (v:vec-sub pixel-sample ray-origin))
+    (r:Ray ray-origin direction))
+  
+  (declare defocus-disk-sample (Void -> v:Vec3))
+  (define (defocus-disk-sample)
+          (let (v:Vec3 x y _) = (v:random-in-unit-disk))
+          (v:vec-add CAMERA-CENTER (v:vec-add (v:vec-mul-scalar DEFOCUS-DISK-U x)
+                                              (v:vec-mul-scalar DEFOCUS-DISK-V y))))
   
   (declare sample-square (Void -> F64 * F64))
   (define (sample-square)
-    (values (- (rand-f32) 0.5d0) (- (rand-f32) 0.5d0)))
+    (values (- (rand-f64) 0.5d0) (- (rand-f64) 0.5d0)))
   
   (declare hit-any? (r:Ray * F64 * F64 -> Optional h:HitRecord))
   (define (hit-any? ray tmin tmax)

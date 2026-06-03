@@ -164,18 +164,18 @@
 ;    
 ;  (declare random (Void -> Vec3))
 ;  (define (random)
-;    (Vec3 (rand-f32) (rand-f32) (rand-f32)))
+;    (Vec3 (rand-f64) (rand-f64) (rand-f64)))
 ;  
 ;  (declare random-within (cp:F32 * cp:F32 -> Vec3))
 ;  (define (random-within min max)
-;    (Vec3 (rand-f32-range min max) (rand-f32-range min max) (rand-f32-range min max)))
+;    (Vec3 (rand-f64-range min max) (rand-f64-range min max) (rand-f64-range min max)))
 ;  
-;  (declare rand-f32 (Void -> cp:F32))
-;  (define (rand-f32)
+;  (declare rand-f64 (Void -> cp:F32))
+;  (define (rand-f64)
 ;    (lisp (-> F32) () (cl:random 1.0)))
 ;  
-;  (declare rand-f32-range (cp:F32 * cp:F32 -> cp:F32))
-;  (define (rand-f32-range min max)
-;    (+ min (* (- max min) (rand-f32))))
+;  (declare rand-f64-range (cp:F32 * cp:F32 -> cp:F32))
+;  (define (rand-f64-range min max)
+;    (+ min (* (- max min) (rand-f64))))
 
 )

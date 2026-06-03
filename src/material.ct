@@ -46,7 +46,7 @@
     (let cannot-refract = (> (* ri sin-theta) 1.0d0))
     ; If the material cannot refract it must reflect
     (let direction = (if (or cannot-refract 
-                             (> (reflectance cos-theta ri) (rand-f32)))
+                             (> (reflectance cos-theta ri) (rand-f64)))
                          (v:reflect unit-direction normal)
                          (v:refract unit-direction normal ri)))
     (values (Some (r:Ray point direction)) (c:white)))
@@ -58,8 +58,8 @@
     (let r0-sq = (* r0 r0))
     (+ r0-sq (* (- 1.0d0 r0-sq) (^ (- 1.0d0 cosine) 5))))
   
-  (declare rand-f32 (Void -> F64))
-  (define (rand-f32)
+  (declare rand-f64 (Void -> F64))
+  (define (rand-f64)
     (lisp (-> F64) () (cl:random 1.0d0)))
   
   (declare scatter (r:Ray * v:Vec3 * v:Vec3 * Boolean * Material -> Optional r:Ray * c:Color))
