@@ -6,6 +6,7 @@
     (#:it #:coalton/iterator)
     (#:list #:coalton/list)
     (#:math #:coalton/math)
+    (#:trig #:coalton/math/elementary)
     (#:sh #:coalton/show)
     (#:c #:ray/color)
     (#:v #:ray/vec3)
@@ -34,11 +35,27 @@
   (declare PIXEL-SAMPLES-SCALE F32)
   (define PIXEL-SAMPLES-SCALE (/ 1.0 (unwrap-as F32 SAMPLES-PER-PIXEL)))
   
+  (declare VFOV UFix)
+  (define VFOV 20)
+  
+  (declare LOOK-FROM v:Vec3)
+  (define LOOK-FROM (v:Vec3 -2.0 2.0 0.0))
+  
+  (declare LOOK-AT v:Vec3)
+  (define LOOK-AT (v:Vec3 0.0 0.0 -1.0))
+  
+  (declare CAMERA-UP v:Vec3)
+  (define CAMERA-UP (v:Vec3 0.0 1.0 0.0))
+      
   (declare FOCAL-LENGTH F32)
-  (define FOCAL-LENGTH 1.0)
+  (define FOCAL-LENGTH (v:vec-length (v:vec-sub LOOK-FROM LOOK-AT)))
+  
+  (define W (v:unit-vector (v:vec-sub LOOK-FROM LOOK-AT)))
+  (define U (v:unit-vector (v:vec-cross CAMERA-UP W)))
+  (define V (v:vec-cross W U))
   
   (declare VIEWPORT-HEIGHT F32)
-  (define VIEWPORT-HEIGHT 2.0)
+  (define VIEWPORT-HEIGHT (* 2.0 (* (trig:tan (/ (deg-to-rad VFOV) 2.0)) FOCAL-LENGTH)))
   
   (declare VIEWPORT-WIDTH F32)
   (define VIEWPORT-WIDTH (* VIEWPORT-HEIGHT (/ (unwrap-as F32 IMAGE-WIDTH) (unwrap-as F32 IMAGE-HEIGHT))))
@@ -47,13 +64,13 @@
   (define COLORS 255)
   
   (declare CAMERA-CENTER v:Vec3)
-  (define CAMERA-CENTER (v:Vec3 0.0 0.0 0.0))
+  (define CAMERA-CENTER LOOK-FROM)
   
   (declare VIEWPORT-U v:Vec3)
-  (define VIEWPORT-U (v:Vec3 VIEWPORT-WIDTH 0.0 0.0))
+  (define VIEWPORT-U (v:vec-mul-scalar U VIEWPORT-WIDTH))
   
   (declare VIEWPORT-V v:Vec3)
-  (define VIEWPORT-V (v:Vec3 0.0 (negate VIEWPORT-HEIGHT) 0.0))
+  (define VIEWPORT-V (v:vec-mul-scalar (v:vec-negate V) VIEWPORT-HEIGHT))
   
   (declare PIXEL-DELTA-U v:Vec3)
   (define PIXEL-DELTA-U (v:vec-div-scalar VIEWPORT-U (unwrap-as F32 IMAGE-WIDTH)))
@@ -64,16 +81,21 @@
   (declare VIEWPORT-UPPER-LEFT v:Vec3)
   (define VIEWPORT-UPPER-LEFT (v:vec-sub 
                                 (v:vec-sub 
-                                  (v:vec-sub CAMERA-CENTER (v:Vec3 0.0 0.0 FOCAL-LENGTH)) 
+                                  (v:vec-sub CAMERA-CENTER (v:vec-mul-scalar W FOCAL-LENGTH)) 
                                   (v:vec-div-scalar VIEWPORT-U 2.0))
                                 (v:vec-div-scalar VIEWPORT-V 2.0)))
   
   (declare PIXEL-00-LOC v:Vec3)
   (define PIXEL-00-LOC (v:vec-add VIEWPORT-UPPER-LEFT
                                       (v:vec-mul-scalar (v:vec-add PIXEL-DELTA-U PIXEL-DELTA-V) 0.5)))
+
+  (declare INFINITY F32)
+  (define INFINITY (the F32 math:infinity))
   
   (declare MAX_DEPTH UFix)
   (define MAX_DEPTH 50)
+  
+
   
   (declare WORLD (List s:Sphere))
   (define WORLD [
@@ -89,7 +111,18 @@
     (s:Sphere (v:Vec3 1.0 0.0 -1.0) 0.5 (m:Metal (c:Color 0.8 0.6 0.2) 1.0))
   ])
   
-  (define INFINITY (the F32 math:infinity))
+  (declare R F32)
+  (define R (trig:cos (/ (the F32 trig:pi) 4.0)))
+  
+  (declare SMALL-WORLD (List s:Sphere))
+  (define SMALL-WORLD [
+    (s:Sphere (v:Vec3 (negate R) 0 -1) R (m:Lambertian (c:Color 0.0 0.0 1.0)))
+    (s:Sphere (v:Vec3 R 0 -1) R (m:Lambertian (c:Color 1.0 0.0 0.0)))
+  ])
+
+  (declare deg-to-rad (UFix -> F32))
+  (define (deg-to-rad degrees)
+    (* (unwrap-as F32 degrees) (/ (the F32 coalton/math/elementary:pi) 180.0)))
   
   (declare rand-f32 (Void -> F32))
   (define (rand-f32)

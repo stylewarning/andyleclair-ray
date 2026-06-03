@@ -19,11 +19,12 @@
            #:vec-mul-scalar
            #:vec-div-scalar
            #:vec-dot
+           #:vec-cross
            #:vec-negate))
 
 (cl:in-package #:ray/vec3)
 
-;(cl:declaim (cl:optimize (cl:speed 3) (cl:safety 0) (cl:debug 0)))
+(cl:declaim (cl:optimize (cl:speed 3) (cl:safety 0) (cl:debug 0)))
 
 (coalton-toplevel
   (define-struct Vec3
@@ -115,6 +116,12 @@
   (define (vec-dot (Vec3 ux uy uz) (Vec3 vx vy vz))
     "Compute the dot-product of two vectors"
     (+ (* ux vx) (+ (* uy vy) (* uz vz))))
+  
+  (declare vec-cross (Vec3 * Vec3 -> Vec3))
+  (define (vec-cross (Vec3 ux uy uz) (Vec3 vx vy vz))
+    (Vec3 (- (* uy vz) (* uz vy))
+          (- (* uz vx) (* ux vz))
+          (- (* ux vy) (* uy vx))))
   
   (declare vec-div-scalar (Vec3 * F32 -> Vec3))
   (define (vec-div-scalar vec t)

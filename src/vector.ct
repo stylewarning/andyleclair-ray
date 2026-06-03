@@ -1,0 +1,181 @@
+(cl:defpackage #:ray/vector
+  (:use #:coalton)
+  (:local-nicknames
+    (#:cp #:coalton-prelude)
+    (#:math #:coalton/math))
+  (:export #:Vector
+           #:V3
+           #:Vec3
+           #:+
+           #:-
+           #:*
+           #:⋆
+           #:/
+           #:·
+           #:negate
+           #:near-zero?))
+
+(cl:in-package #:ray/vector)
+
+(cl:declaim (cl:optimize (cl:speed 3) (cl:safety 0) (cl:debug 0)))
+
+(coalton-toplevel
+  (define-class (Vector :v)
+    (+ "Add two vectors together"
+      (cp:Num :a => :v :a * :v :a -> :v :a))
+    (- "Subtract one vector from another"
+      (cp:Num :a => :v :a * :v :a -> :v :a))
+    (* "Multiply two vectors"
+      (cp:Num :a => :v :a * :v :a -> :v :a))
+    (⋆ "Multiply a vector by a scalar (note: this name is \\star not *)"
+      (cp:Num :a => :v :a * :a -> :v :a))
+    (/ "Divide a vector by a scalar"
+      (cp:Reciprocable :a => :v :a * :a -> :v :a))
+    (· "Dot-product of two vectors"
+      (cp:Num :a => :v :a * :v :a -> :a))
+    (negate "Negate a vector"
+      (cp:Num :a => :v :a -> :v :a))
+    ;(near-zero? (cp:Num :a => :v :a -> Boolean))
+  )
+  
+  (repr :native (cl:simple-array cl:double-float (3)))
+  (define-type V3)
+  
+  (declare make-v3 (F64 * F64 * F64 -> V3))
+  (define (make-v3 x y z)
+    (lisp (-> V3) (x y z) 
+      (cl:make-array 3 :element-type 'cl:double-float :initial-contents (make-list x y z))))
+  
+  (define-type (Vec3 :a) (Vec3 :a :a :a))
+  
+  (define-instance (Vector Vec3)
+    (define (+ (Vec3 x1 y1 z1) (Vec3 x2 y2 z2))
+      (Vec3 (cp:+ x1 x2) (cp:+ y1 y2) (cp:+ z1 z2)))
+                   
+    (define (- (Vec3 x1 y1 z1) (Vec3 x2 y2 z2))
+      (Vec3 (cp:- x1 x2) (cp:- y1 y2) (cp:- z1 z2)))
+
+    (define (· (Vec3 x1 y1 z1) (Vec3 x2 y2 z2))
+      (cp:+ (cp:* x1 x2) (cp:+ (cp:* y1 y2) (cp:* z1 z2))))
+    
+    (define (* (Vec3 x1 y1 z1) (Vec3 x2 y2 z2))
+      (Vec3 (cp:* x1 x2) (cp:* y1 y2) (cp:* z1 z2)))
+
+    (define (⋆ (Vec3 x y z) t)
+      (Vec3 (cp:* x t) (cp:* y t) (cp:* z t)))
+    
+    (define (/ (Vec3 x y z) t)
+      (Vec3 (cp:/ x t) (cp:/ y t) (cp:/ z t)))
+    
+    (define (negate (Vec3 x y z)) 
+      (Vec3 (cp:negate x) (cp:negate y) (cp:negate z)))
+    
+   ; (define (near-zero? (Vec3 x y z))
+    ;  (let a = 1.0e-8)
+   ;   (and (cp:< x a) (cp:< y a) (cp:< z a)))
+
+  )
+  
+;  (declare random-unit-vector (Void -> Vec3))
+;  (define (random-unit-vector)
+;    (let p = (random-within -1.0 1.0))
+;    (let lensq = (vec-length-squared p))
+;    (if (and (> lensq 1.0e-45)
+;             (<= lensq 1))
+;        (vec-div-scalar p (math:sqrt lensq))
+;        (random-unit-vector)))
+;  
+;  (declare random-on-hemisphere (Vec3 -> Vec3))
+;  (define (random-on-hemisphere normal)
+;    (let on-unit-sphere = (random-unit-vector))
+;    (if (> (vec-dot on-unit-sphere normal) 0.0)
+;        on-unit-sphere
+;        (vec-negate on-unit-sphere)))
+;  
+;  (declare reflect (Vec3 * Vec3 -> Vec3))
+;  (define (reflect v n)
+;    (vec-sub v (vec-mul-scalar n (* (vec-dot v n) 2))))
+;  
+;  (declare refract (Vec3 * Vec3 * F32 -> Vec3))
+;  (define (refract uv n etai-over-etat)
+;    (let cos-theta = (min (vec-dot (vec-negate uv) n) 1.0))
+;    (let r-out-perp = (vec-mul-scalar 
+;                        (vec-add uv (vec-mul-scalar n cos-theta))
+;                        etai-over-etat))
+;    (let r-out-parallel = (vec-mul-scalar n 
+;                                          (negate (math:sqrt (abs (- 1.0 (vec-length-squared r-out-perp)))))))
+;    (vec-add r-out-perp r-out-parallel))
+;  
+;  (declare near-zero? (Vec3 -> Boolean))
+;  (define (near-zero? (Vec3 x y z))
+;    (let a = 1.0e-8)
+;    (and (< x a) (< y a) (< z a)))
+;  
+;  (declare unit-vector (Vec3 -> Vec3))
+;  (define (unit-vector v)
+;    (vec-div-scalar v (vec-length v)))
+; 
+;  (declare vec-length-squared (Vec3 -> F32))
+;  (define (vec-length-squared (Vec3 x y z))
+;    (+ (* x x) (+ (* y y) (* z z))))
+;  
+;  (declare vec-length (Vec3 -> F32))
+;  (define (vec-length vec)
+;    (math:sqrt (vec-length-squared vec)))
+;  
+;  (declare vec-add (Vec3 * Vec3 -> Vec3))
+;  (define (vec-add (Vec3 ux uy uz) (Vec3 vx vy vz))
+;    "Adds two vectors together"
+;    (Vec3 (+ ux vx) (+ uy vy) (+ uz vz)))
+;  
+;  (declare vec-add-scalar (Vec3 * F32 -> Vec3))
+;  (define (vec-add-scalar (Vec3 x y z) t)
+;    "Add a scalar to all fields of a vector"
+;    (Vec3 (+ x t) (+ y t) (+ z t)))
+;  
+;  (declare vec-sub (Vec3 * Vec3 -> Vec3))
+;  (define (vec-sub (Vec3 ux uy uz) (Vec3 vx vy vz))
+;    "Subtract one vector from another"
+;    (Vec3 (- ux vx) (- uy vy) (- uz vz)))
+;  
+;  (declare vec-mul (Vec3 * Vec3 -> Vec3))
+;  (define (vec-mul (Vec3 ux uy uz) (Vec3 vx vy vz))
+;    "Multiply two vectors together"
+;    (Vec3 (* ux vx) (* uy vy) (* uz vz)))
+;  
+;  (declare vec-mul-scalar (Vec3 * F32 -> Vec3))
+;  (define (vec-mul-scalar (Vec3 x y z) t)
+;    "Multiply a vector by a scalar"
+;    (Vec3 (* t x) (* t y) (* t z)))
+;  
+;  (declare vec-dot (Vec3 * Vec3 -> F32))
+;  (define (vec-dot (Vec3 ux uy uz) (Vec3 vx vy vz))
+;    "Compute the dot-product of two vectors"
+;    (+ (* ux vx) (+ (* uy vy) (* uz vz))))
+;  
+;  (declare vec-div-scalar (Vec3 * F32 -> Vec3))
+;  (define (vec-div-scalar vec t)
+;    (vec-mul-scalar vec (/ 1.0 t)))
+;  
+;  (declare vec-negate (Vec3 -> Vec3))
+;  (define (vec-negate (Vec3 x y z))
+;    (Vec3 (negate x) (negate y) (negate z)))
+;  
+;    
+;  (declare random (Void -> Vec3))
+;  (define (random)
+;    (Vec3 (rand-f32) (rand-f32) (rand-f32)))
+;  
+;  (declare random-within (cp:F32 * cp:F32 -> Vec3))
+;  (define (random-within min max)
+;    (Vec3 (rand-f32-range min max) (rand-f32-range min max) (rand-f32-range min max)))
+;  
+;  (declare rand-f32 (Void -> cp:F32))
+;  (define (rand-f32)
+;    (lisp (-> F32) () (cl:random 1.0)))
+;  
+;  (declare rand-f32-range (cp:F32 * cp:F32 -> cp:F32))
+;  (define (rand-f32-range min max)
+;    (+ min (* (- max min) (rand-f32))))
+
+)
