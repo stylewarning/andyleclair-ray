@@ -13,7 +13,7 @@
 (coalton-toplevel
   (define-struct Sphere
     (center v:Vec3)
-    (radius F32)
+    (radius F64)
     (material m:Material))
   
   (define-instance (h:Hittable Sphere)

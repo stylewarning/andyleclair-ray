@@ -13,15 +13,15 @@
 
 (coalton-toplevel
   (define-struct Color
-    (r F32)
-    (g F32)
-    (b F32))
+    (r F64)
+    (g F64)
+    (b F64))
   
   (declare black (Void -> Color))
-  (define (black) (Color 0.0 0.0 0.0))
+  (define (black) (Color 0.0d0 0.0d0 0.0d0))
   
   (declare white (Void -> Color))
-  (define (white) (Color 1.0 1.0 1.0))
+  (define (white) (Color 1.0d0 1.0d0 1.0d0))
   
   (declare mul (Color * Color  -> Color))
   (define (mul (Color r g b) (Color r2 g2 b2))
@@ -29,7 +29,7 @@
     (Color (* r r2) (* g g2) (* b b2)))
 
   
-  (declare mul-scalar (Color * F32  -> Color))
+  (declare mul-scalar (Color * F64  -> Color))
   (define (mul-scalar (Color r g b) v)
     "Multiply a color by a given scalar value"
     (Color (* r v) (* g v) (* b v)))

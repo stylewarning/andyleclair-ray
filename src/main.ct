@@ -32,33 +32,33 @@
   (declare SAMPLES-PER-PIXEL Integer)
   (define SAMPLES-PER-PIXEL 100)
     
-  (declare PIXEL-SAMPLES-SCALE F32)
-  (define PIXEL-SAMPLES-SCALE (/ 1.0 (unwrap-as F32 SAMPLES-PER-PIXEL)))
+  (declare PIXEL-SAMPLES-SCALE F64)
+  (define PIXEL-SAMPLES-SCALE (/ 1.0d0 (unwrap-as F64 SAMPLES-PER-PIXEL)))
   
   (declare VFOV UFix)
   (define VFOV 20)
   
   (declare LOOK-FROM v:Vec3)
-  (define LOOK-FROM (v:Vec3 -2.0 2.0 0.0))
+  (define LOOK-FROM (v:Vec3 -2.0d0 2.0d0 0.0d0))
   
   (declare LOOK-AT v:Vec3)
-  (define LOOK-AT (v:Vec3 0.0 0.0 -1.0))
+  (define LOOK-AT (v:Vec3 0.0d0 0.0d0 -1.0d0))
   
   (declare CAMERA-UP v:Vec3)
-  (define CAMERA-UP (v:Vec3 0.0 1.0 0.0))
+  (define CAMERA-UP (v:Vec3 0.0d0 1.0d0 0.0d0))
       
-  (declare FOCAL-LENGTH F32)
+  (declare FOCAL-LENGTH F64)
   (define FOCAL-LENGTH (v:vec-length (v:vec-sub LOOK-FROM LOOK-AT)))
   
   (define W (v:unit-vector (v:vec-sub LOOK-FROM LOOK-AT)))
   (define U (v:unit-vector (v:vec-cross CAMERA-UP W)))
   (define V (v:vec-cross W U))
   
-  (declare VIEWPORT-HEIGHT F32)
-  (define VIEWPORT-HEIGHT (* 2.0 (* (trig:tan (/ (deg-to-rad VFOV) 2.0)) FOCAL-LENGTH)))
+  (declare VIEWPORT-HEIGHT F64)
+  (define VIEWPORT-HEIGHT (* 2.0d0 (* (trig:tan (/ (deg-to-rad VFOV) 2.0d0)) FOCAL-LENGTH)))
   
-  (declare VIEWPORT-WIDTH F32)
-  (define VIEWPORT-WIDTH (* VIEWPORT-HEIGHT (/ (unwrap-as F32 IMAGE-WIDTH) (unwrap-as F32 IMAGE-HEIGHT))))
+  (declare VIEWPORT-WIDTH F64)
+  (define VIEWPORT-WIDTH (* VIEWPORT-HEIGHT (/ (unwrap-as F64 IMAGE-WIDTH) (unwrap-as F64 IMAGE-HEIGHT))))
   
   (declare COLORS Integer)
   (define COLORS 255)
@@ -73,24 +73,24 @@
   (define VIEWPORT-V (v:vec-mul-scalar (v:vec-negate V) VIEWPORT-HEIGHT))
   
   (declare PIXEL-DELTA-U v:Vec3)
-  (define PIXEL-DELTA-U (v:vec-div-scalar VIEWPORT-U (unwrap-as F32 IMAGE-WIDTH)))
+  (define PIXEL-DELTA-U (v:vec-div-scalar VIEWPORT-U (unwrap-as F64 IMAGE-WIDTH)))
 
   (declare PIXEL-DELTA-V v:Vec3)
-  (define PIXEL-DELTA-V (v:vec-div-scalar VIEWPORT-V (unwrap-as F32 IMAGE-HEIGHT)))
+  (define PIXEL-DELTA-V (v:vec-div-scalar VIEWPORT-V (unwrap-as F64 IMAGE-HEIGHT)))
   
   (declare VIEWPORT-UPPER-LEFT v:Vec3)
   (define VIEWPORT-UPPER-LEFT (v:vec-sub 
                                 (v:vec-sub 
                                   (v:vec-sub CAMERA-CENTER (v:vec-mul-scalar W FOCAL-LENGTH)) 
-                                  (v:vec-div-scalar VIEWPORT-U 2.0))
-                                (v:vec-div-scalar VIEWPORT-V 2.0)))
+                                  (v:vec-div-scalar VIEWPORT-U 2.0d0))
+                                (v:vec-div-scalar VIEWPORT-V 2.0d0)))
   
   (declare PIXEL-00-LOC v:Vec3)
   (define PIXEL-00-LOC (v:vec-add VIEWPORT-UPPER-LEFT
-                                      (v:vec-mul-scalar (v:vec-add PIXEL-DELTA-U PIXEL-DELTA-V) 0.5)))
+                                      (v:vec-mul-scalar (v:vec-add PIXEL-DELTA-U PIXEL-DELTA-V) 0.5d0)))
 
-  (declare INFINITY F32)
-  (define INFINITY (the F32 math:infinity))
+  (declare INFINITY F64)
+  (define INFINITY (the F64 math:infinity))
   
   (declare MAX_DEPTH UFix)
   (define MAX_DEPTH 50)
@@ -100,35 +100,35 @@
   (declare WORLD (List s:Sphere))
   (define WORLD [
     ; Big ass world sphere
-    (s:Sphere (v:Vec3 0.0 -100.5 -1.0) 100.0 (m:Lambertian (c:Color 0.8 0.8 0.0)))
+    (s:Sphere (v:Vec3 0.0d0 -100.5d0 -1.0d0) 100.0d0 (m:Lambertian (c:Color 0.8d0 0.8d0 0.0d0)))
     ; Center
-    (s:Sphere (v:Vec3 0.0 0.0 -1.2) 0.5 (m:Lambertian (c:Color 0.1 0.2 0.5)))
+    (s:Sphere (v:Vec3 0.0d0 0.0d0 -1.2d0) 0.5d0 (m:Lambertian (c:Color 0.1d0 0.2d0 0.5d0)))
     ; Left
-    (s:Sphere (v:Vec3 -1.0 0.0 -1.0) 0.5 (m:Dielectric 1.50))
+    (s:Sphere (v:Vec3 -1.0d0 0.0d0 -1.0d0) 0.5d0 (m:Dielectric 1.5d0))
     ; Bubble
-    (s:Sphere (v:Vec3 -1.0 0.0 -1.0) 0.4 (m:Dielectric (/ 1.0 1.50)))
+    (s:Sphere (v:Vec3 -1.0d0 0.0d0 -1.0d0) 0.4d0 (m:Dielectric (/ 1.0d0 1.5d0)))
     ; Right
-    (s:Sphere (v:Vec3 1.0 0.0 -1.0) 0.5 (m:Metal (c:Color 0.8 0.6 0.2) 1.0))
+    (s:Sphere (v:Vec3 1.0d0 0.0d0 -1.0d0) 0.5d0 (m:Metal (c:Color 0.8d0 0.6d0 0.2d0) 1.0d0))
   ])
   
-  (declare R F32)
-  (define R (trig:cos (/ (the F32 trig:pi) 4.0)))
+  (declare R F64)
+  (define R (trig:cos (/ (the F64 trig:pi) 4.0d0)))
   
   (declare SMALL-WORLD (List s:Sphere))
   (define SMALL-WORLD [
-    (s:Sphere (v:Vec3 (negate R) 0 -1) R (m:Lambertian (c:Color 0.0 0.0 1.0)))
-    (s:Sphere (v:Vec3 R 0 -1) R (m:Lambertian (c:Color 1.0 0.0 0.0)))
+    (s:Sphere (v:Vec3 (negate R) 0 -1) R (m:Lambertian (c:Color 0.0d0 0.0d0 1.0d0)))
+    (s:Sphere (v:Vec3 R 0 -1) R (m:Lambertian (c:Color 1.0d0 0.0d0 0.0d0)))
   ])
 
-  (declare deg-to-rad (UFix -> F32))
+  (declare deg-to-rad (UFix -> F64))
   (define (deg-to-rad degrees)
-    (* (unwrap-as F32 degrees) (/ (the F32 coalton/math/elementary:pi) 180.0)))
+    (* (unwrap-as F64 degrees) (/ (the F64 coalton/math/elementary:pi) 180.0d0)))
   
-  (declare rand-f32 (Void -> F32))
+  (declare rand-f32 (Void -> F64))
   (define (rand-f32)
-    (lisp (-> F32) () (cl:random 1.0)))
+    (lisp (-> F64) () (cl:random 1.0d0)))
   
-  (declare rand-f32-range (F32 * F32 -> F32))
+  (declare rand-f32-range (F64 * F64 -> F64))
   (define (rand-f32-range min max)
     (+ min (* (- max min) (rand-f32))))
   
@@ -138,16 +138,16 @@
     (let (values offset-x offset-y) = (sample-square))
     (let pixel-sample = (v:vec-add PIXEL-00-LOC
                                    (v:vec-add
-                                     (v:vec-mul-scalar PIXEL-DELTA-U (+ (unwrap-as F32 i) offset-x))
-                                     (v:vec-mul-scalar PIXEL-DELTA-V (+ (unwrap-as F32 j) offset-y)))))
+                                     (v:vec-mul-scalar PIXEL-DELTA-U (+ (unwrap-as F64 i) offset-x))
+                                     (v:vec-mul-scalar PIXEL-DELTA-V (+ (unwrap-as F64 j) offset-y)))))
     (let direction = (v:vec-sub pixel-sample CAMERA-CENTER))
     (r:Ray CAMERA-CENTER direction))
   
-  (declare sample-square (Void -> F32 * F32))
+  (declare sample-square (Void -> F64 * F64))
   (define (sample-square)
-    (values (- (rand-f32) 0.5) (- (rand-f32) 0.5)))
+    (values (- (rand-f32) 0.5d0) (- (rand-f32) 0.5d0)))
   
-  (declare hit-any? (r:Ray * F32 * F32 -> Optional h:HitRecord))
+  (declare hit-any? (r:Ray * F64 * F64 -> Optional h:HitRecord))
   (define (hit-any? ray tmin tmax)
     (let (Tuple closest-hit _) =
       (fold 
@@ -164,7 +164,7 @@
     (cond 
       ((<= depth 0) (c:black))
       (True
-        (match (hit-any? r 0.001 INFINITY)
+        (match (hit-any? r 0.0d001 INFINITY)
           ((Some (h:HitRecord point normal _ front-face? material))
             (let (values maybe-ray attenuation) = (m:scatter r point normal front-face? material))
             (match maybe-ray
@@ -173,12 +173,12 @@
                    ((None) attenuation)))
           ((None)
             (let (v:Vec3 _ y _) = (v:unit-vector (.direction r)))
-            (let alpha = (* 0.5 (+ y 1.0)))
+            (let alpha = (* 0.5d0 (+ y 1.0d0)))
             (c:add 
-              (c:mul-scalar (c:Color 1.0 1.0 1.0) (- 1.0 alpha))
-              (c:mul-scalar (c:Color 0.5 0.7 1.0) alpha)))))))
+              (c:mul-scalar (c:Color 1.0d0 1.0d0 1.0d0) (- 1.0d0 alpha))
+              (c:mul-scalar (c:Color 0.5d0 0.7d0 1.0d0) alpha)))))))
   
-  (declare linear-to-gamma (F32 -> F32))
+  (declare linear-to-gamma (F64 -> F64))
   (define (linear-to-gamma linear-comp)
           (if (> 0 linear-comp)
               0
@@ -186,9 +186,9 @@
   
   (declare write-pixel (file:FileStream Char * c:Color -> Void))
   (define (write-pixel stream (c:Color r g b))
-    (let rbyte = (floor (* 255.999 (linear-to-gamma r))))
-    (let gbyte = (floor (* 255.999 (linear-to-gamma g))))
-    (let bbyte = (floor (* 255.999 (linear-to-gamma b))))
+    (let rbyte = (floor (* 255.999d0 (linear-to-gamma r))))
+    (let gbyte = (floor (* 255.999d0 (linear-to-gamma g))))
+    (let bbyte = (floor (* 255.999d0 (linear-to-gamma b))))
     (lisp (-> Void) (stream rbyte gbyte bbyte) 
       (cl:format stream "~D ~D ~D~%" rbyte gbyte bbyte)
       (cl:values)))
@@ -196,8 +196,8 @@
   (declare pixel-center (Integer * Integer -> v:Vec3))
   (define (pixel-center i j)
     (v:vec-add PIXEL-00-LOC
-                 (v:vec-add (v:vec-mul-scalar PIXEL-DELTA-U (unwrap-as F32 i)) 
-                            (v:vec-mul-scalar PIXEL-DELTA-V (unwrap-as F32 j)))))
+                 (v:vec-add (v:vec-mul-scalar PIXEL-DELTA-U (unwrap-as F64 i)) 
+                            (v:vec-mul-scalar PIXEL-DELTA-V (unwrap-as F64 j)))))
   
   (declare write-pixels (file:FileStream Char -> Void))
   (define (write-pixels stream)

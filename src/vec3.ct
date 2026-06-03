@@ -28,23 +28,23 @@
 
 (coalton-toplevel
   (define-struct Vec3
-    (x F32)
-    (y F32)
-    (z F32))
+    (x F64)
+    (y F64)
+    (z F64))
   
   (declare random (Void -> Vec3))
   (define (random)
     (Vec3 (rand-f32) (rand-f32) (rand-f32)))
   
-  (declare random-within (F32 * F32 -> Vec3))
+  (declare random-within (F64 * F64 -> Vec3))
   (define (random-within min max)
     (Vec3 (rand-f32-range min max) (rand-f32-range min max) (rand-f32-range min max)))
   
   (declare random-unit-vector (Void -> Vec3))
   (define (random-unit-vector)
-    (let p = (random-within -1.0 1.0))
+    (let p = (random-within -1.0d0 1.0d0))
     (let lensq = (vec-length-squared p))
-    (if (and (> lensq 1.0e-45)
+    (if (and (> lensq 1.0d-160)
              (<= lensq 1))
         (vec-div-scalar p (math:sqrt lensq))
         (random-unit-vector)))
@@ -52,38 +52,45 @@
   (declare random-on-hemisphere (Vec3 -> Vec3))
   (define (random-on-hemisphere normal)
     (let on-unit-sphere = (random-unit-vector))
-    (if (> (vec-dot on-unit-sphere normal) 0.0)
+    (if (> (vec-dot on-unit-sphere normal) 0.0d0)
         on-unit-sphere
         (vec-negate on-unit-sphere)))
+  
+  (declare random-in-unit-disk (Void -> Vec3))
+  (define (random-in-unit-disk)
+    (let p = (Vec3 (rand-f32-range -1.0d0 1.0d0) (rand-f32-range -1.0d0 1.0d0) 0.0d0))
+    (if (< (vec-length-squared p) 1.0d0)
+        p
+        (random-in-unit-disk)))
   
   (declare reflect (Vec3 * Vec3 -> Vec3))
   (define (reflect v n)
     (vec-sub v (vec-mul-scalar n (* (vec-dot v n) 2))))
   
-  (declare refract (Vec3 * Vec3 * F32 -> Vec3))
+  (declare refract (Vec3 * Vec3 * F64 -> Vec3))
   (define (refract uv n etai-over-etat)
-    (let cos-theta = (min (vec-dot (vec-negate uv) n) 1.0))
+    (let cos-theta = (min (vec-dot (vec-negate uv) n) 1.0d0))
     (let r-out-perp = (vec-mul-scalar 
                         (vec-add uv (vec-mul-scalar n cos-theta))
                         etai-over-etat))
     (let r-out-parallel = (vec-mul-scalar n 
-                                          (negate (math:sqrt (abs (- 1.0 (vec-length-squared r-out-perp)))))))
+                                          (negate (math:sqrt (abs (- 1.0d0 (vec-length-squared r-out-perp)))))))
     (vec-add r-out-perp r-out-parallel))
   
   (declare near-zero? (Vec3 -> Boolean))
   (define (near-zero? (Vec3 x y z))
-    (let a = 1.0e-8)
+    (let a = 1.0d-8)
     (and (< x a) (< y a) (< z a)))
   
   (declare unit-vector (Vec3 -> Vec3))
   (define (unit-vector v)
     (vec-div-scalar v (vec-length v)))
  
-  (declare vec-length-squared (Vec3 -> F32))
+  (declare vec-length-squared (Vec3 -> F64))
   (define (vec-length-squared (Vec3 x y z))
     (+ (* x x) (+ (* y y) (* z z))))
   
-  (declare vec-length (Vec3 -> F32))
+  (declare vec-length (Vec3 -> F64))
   (define (vec-length vec)
     (math:sqrt (vec-length-squared vec)))
   
@@ -92,7 +99,7 @@
     "Adds two vectors together"
     (Vec3 (+ ux vx) (+ uy vy) (+ uz vz)))
   
-  (declare vec-add-scalar (Vec3 * F32 -> Vec3))
+  (declare vec-add-scalar (Vec3 * F64 -> Vec3))
   (define (vec-add-scalar (Vec3 x y z) t)
     "Add a scalar to all fields of a vector"
     (Vec3 (+ x t) (+ y t) (+ z t)))
@@ -107,12 +114,12 @@
     "Multiply two vectors together"
     (Vec3 (* ux vx) (* uy vy) (* uz vz)))
   
-  (declare vec-mul-scalar (Vec3 * F32 -> Vec3))
+  (declare vec-mul-scalar (Vec3 * F64 -> Vec3))
   (define (vec-mul-scalar (Vec3 x y z) t)
     "Multiply a vector by a scalar"
     (Vec3 (* t x) (* t y) (* t z)))
   
-  (declare vec-dot (Vec3 * Vec3 -> F32))
+  (declare vec-dot (Vec3 * Vec3 -> F64))
   (define (vec-dot (Vec3 ux uy uz) (Vec3 vx vy vz))
     "Compute the dot-product of two vectors"
     (+ (* ux vx) (+ (* uy vy) (* uz vz))))
@@ -123,20 +130,20 @@
           (- (* uz vx) (* ux vz))
           (- (* ux vy) (* uy vx))))
   
-  (declare vec-div-scalar (Vec3 * F32 -> Vec3))
+  (declare vec-div-scalar (Vec3 * F64 -> Vec3))
   (define (vec-div-scalar vec t)
-    (vec-mul-scalar vec (/ 1.0 t)))
+    (vec-mul-scalar vec (/ 1.0d0 t)))
   
   (declare vec-negate (Vec3 -> Vec3))
   (define (vec-negate (Vec3 x y z))
     (Vec3 (negate x) (negate y) (negate z)))
   
   
-  (declare rand-f32 (Void -> F32))
+  (declare rand-f32 (Void -> F64))
   (define (rand-f32)
-    (lisp (-> F32) () (cl:random 1.0)))
+    (lisp (-> F64) () (cl:random 1.0d0)))
   
-  (declare rand-f32-range (F32 * F32 -> F32))
+  (declare rand-f32-range (F64 * F64 -> F64))
   (define (rand-f32-range min max)
     (+ min (* (- max min) (rand-f32))))
 
