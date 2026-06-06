@@ -1,6 +1,13 @@
 (cl:defpackage #:ray
   (:use #:coalton 
-        #:coalton-prelude)
+        #:coalton-prelude
+        #:io/monad-io
+        #:io/simple-io
+        #:io/thread
+        #:io/conc/ring-buffer
+        #:io/conc/worker-pool)
+  (:import-from #:coalton/experimental/do-control-loops
+                #:do-loop-times)
   (:local-nicknames
     (#:file #:coalton/file)
     (#:it #:coalton/iterator)
@@ -8,12 +15,16 @@
     (#:math #:coalton/math)
     (#:trig #:coalton/math/elementary)
     (#:sh #:coalton/show)
+    (#:la #:coalton/lisparray)
     (#:c #:ray/color)
     (#:v #:ray/vec3)
     (#:h #:ray/hittable)
     (#:r #:ray/ray)
     (#:s #:ray/sphere)
-    (#:m #:ray/material)))
+    (#:m #:ray/material)
+    (#:util #:ray/util)
+    (#:scene #:ray/scene)
+    (#:ppm #:ray/ppm)))
 
 (cl:in-package #:ray)
 
@@ -23,14 +34,14 @@
   (declare ASPECT-RATIO Fraction)
   (define ASPECT-RATIO (/ 16 9))
   
-  (declare IMAGE-WIDTH Integer)
-  (define IMAGE-WIDTH 400)
+  (declare IMAGE-WIDTH UFix)
+  (define IMAGE-WIDTH 1200)
   
-  (declare IMAGE-HEIGHT Integer)
-  (define IMAGE-HEIGHT (floor (/ (into IMAGE-WIDTH) ASPECT-RATIO)))
+  (declare IMAGE-HEIGHT UFix)
+  (define IMAGE-HEIGHT (unwrap-as UFix (floor (/ (into IMAGE-WIDTH) ASPECT-RATIO))))
   
-  (declare SAMPLES-PER-PIXEL Integer)
-  (define SAMPLES-PER-PIXEL 100)
+  (declare SAMPLES-PER-PIXEL UFix)
+  (define SAMPLES-PER-PIXEL 500)
     
   (declare PIXEL-SAMPLES-SCALE F64)
   (define PIXEL-SAMPLES-SCALE (/ 1.0d0 (unwrap-as F64 SAMPLES-PER-PIXEL)))
@@ -39,16 +50,16 @@
   (define VFOV 20.0d0)
   
   (declare DEFOCUS-ANGLE F64)
-  (define DEFOCUS-ANGLE 10.0d0)
+  (define DEFOCUS-ANGLE 0.6d0)
   
   (declare FOCUS-DIST F64)
-  (define FOCUS-DIST 3.4d0)
+  (define FOCUS-DIST 10.0d0)
   
   (declare LOOK-FROM v:Vec3)
-  (define LOOK-FROM (v:Vec3 -2.0d0 2.0d0 0.0d0))
+  (define LOOK-FROM (v:Vec3 13.0d0 2.0d0 3.0d0))
   
   (declare LOOK-AT v:Vec3)
-  (define LOOK-AT (v:Vec3 0.0d0 0.0d0 -1.0d0))
+  (define LOOK-AT (v:Vec3 0.0d0 0.0d0 0.0d0))
   
   (declare CAMERA-UP v:Vec3)
   (define CAMERA-UP (v:Vec3 0.0d0 1.0d0 0.0d0))
@@ -61,12 +72,13 @@
   (define V (v:vec-cross W U))
   
   (declare VIEWPORT-HEIGHT F64)
-  (define VIEWPORT-HEIGHT (* 2.0d0 (* (trig:tan (/ (deg-to-rad VFOV) 2.0d0)) FOCUS-DIST)))
+  (define VIEWPORT-HEIGHT (* 2.0d0 (* (trig:tan (/ (util:deg-to-rad VFOV) 2.0d0)) FOCUS-DIST)))
   
   (declare VIEWPORT-WIDTH F64)
-  (define VIEWPORT-WIDTH (* VIEWPORT-HEIGHT (/ (unwrap-as F64 IMAGE-WIDTH) (unwrap-as F64 IMAGE-HEIGHT))))
+  (define VIEWPORT-WIDTH (* VIEWPORT-HEIGHT (/ (unwrap-as F64 IMAGE-WIDTH)
+                                               (unwrap-as F64 IMAGE-HEIGHT))))
   
-  (declare COLORS Integer)
+  (declare COLORS UFix)
   (define COLORS 255)
   
   (declare CAMERA-CENTER v:Vec3)
@@ -95,7 +107,7 @@
   (define PIXEL-00-LOC (v:vec-add VIEWPORT-UPPER-LEFT
                                       (v:vec-mul-scalar (v:vec-add PIXEL-DELTA-U PIXEL-DELTA-V) 0.5d0)))
   
-  (define DEFOCUS-RADIUS (* FOCUS-DIST (trig:tan (deg-to-rad (/ DEFOCUS-ANGLE 2.0d0)))))
+  (define DEFOCUS-RADIUS (* FOCUS-DIST (trig:tan (util:deg-to-rad (/ DEFOCUS-ANGLE 2.0d0)))))
   
   (define DEFOCUS-DISK-U (v:vec-mul-scalar U DEFOCUS-RADIUS))
   (define DEFOCUS-DISK-V (v:vec-mul-scalar V DEFOCUS-RADIUS))
@@ -106,42 +118,11 @@
   (declare MAX_DEPTH UFix)
   (define MAX_DEPTH 50)
   
-  (declare WORLD (List s:Sphere))
-  (define WORLD [
-    ; Big ass world sphere
-    (s:Sphere (v:Vec3 0.0d0 -100.5d0 -1.0d0) 100.0d0 (m:Lambertian (c:Color 0.8d0 0.8d0 0.0d0)))
-    ; Center
-    (s:Sphere (v:Vec3 0.0d0 0.0d0 -1.2d0) 0.5d0 (m:Lambertian (c:Color 0.1d0 0.2d0 0.5d0)))
-    ; Left
-    (s:Sphere (v:Vec3 -1.0d0 0.0d0 -1.0d0) 0.5d0 (m:Dielectric 1.5d0))
-    ; Bubble
-    (s:Sphere (v:Vec3 -1.0d0 0.0d0 -1.0d0) 0.4d0 (m:Dielectric (/ 1.0d0 1.5d0)))
-    ; Right
-    (s:Sphere (v:Vec3 1.0d0 0.0d0 -1.0d0) 0.5d0 (m:Metal (c:Color 0.8d0 0.6d0 0.2d0) 1.0d0))
-  ])
+  (declare NUM-THREADS UFix)
+  (define NUM-THREADS 12)
   
-  (declare R F64)
-  (define R (trig:cos (/ (the F64 trig:pi) 4.0d0)))
   
-  (declare SMALL-WORLD (List s:Sphere))
-  (define SMALL-WORLD [
-    (s:Sphere (v:Vec3 (negate R) 0 -1) R (m:Lambertian (c:Color 0.0d0 0.0d0 1.0d0)))
-    (s:Sphere (v:Vec3 R 0 -1) R (m:Lambertian (c:Color 1.0d0 0.0d0 0.0d0)))
-  ])
-
-  (declare deg-to-rad (F64 -> F64))
-  (define (deg-to-rad degrees)
-    (* degrees (/ (the F64 coalton/math/elementary:pi) 180.0d0)))
-  
-  (declare rand-f64 (Void -> F64))
-  (define (rand-f64)
-    (lisp (-> F64) () (cl:random 1.0d0)))
-  
-  (declare rand-f64-range (F64 * F64 -> F64))
-  (define (rand-f64-range min max)
-    (+ min (* (- max min) (rand-f64))))
-  
-  (declare get-ray (Integer * Integer -> r:Ray))
+  (declare get-ray (UFix * UFix -> r:Ray))
   (define (get-ray i j)
     "Construct a camera ray originating at the origin and directed at a randomly sampled point around pixel location (i,j)"
     (let (values offset-x offset-y) = (sample-square))
@@ -163,7 +144,7 @@
   
   (declare sample-square (Void -> F64 * F64))
   (define (sample-square)
-    (values (- (rand-f64) 0.5d0) (- (rand-f64) 0.5d0)))
+    (values (- (util:rand-f64) 0.5d0) (- (util:rand-f64) 0.5d0)))
   
   (declare hit-any? (r:Ray * F64 * F64 -> Optional h:HitRecord))
   (define (hit-any? ray tmin tmax)
@@ -174,13 +155,13 @@
             ((Some hit) (Tuple (Some hit) (.t hit)))
             ((None) (Tuple hit-rec closest-so-far))))
         (Tuple None tmax) 
-        WORLD))
+        scene:complex-world))
     closest-hit)
   
   (declare ray-color (r:Ray * UFix -> c:Color))
   (define (ray-color r depth)
     (cond 
-      ((<= depth 0) (c:black))
+      ((<= depth 0) c:black)
       (True
         (match (hit-any? r 0.0d001 INFINITY)
           ((Some (h:HitRecord point normal _ front-face? material))
@@ -193,69 +174,63 @@
             (let (v:Vec3 _ y _) = (v:unit-vector (.direction r)))
             (let alpha = (* 0.5d0 (+ y 1.0d0)))
             (c:add 
-              (c:mul-scalar (c:Color 1.0d0 1.0d0 1.0d0) (- 1.0d0 alpha))
+              (c:mul-scalar c:white (- 1.0d0 alpha))
               (c:mul-scalar (c:Color 0.5d0 0.7d0 1.0d0) alpha)))))))
+
   
-  (declare linear-to-gamma (F64 -> F64))
-  (define (linear-to-gamma linear-comp)
-          (if (> 0 linear-comp)
-              0
-              (math:sqrt linear-comp)))
-  
-  (declare write-pixel (file:FileStream Char * c:Color -> Void))
-  (define (write-pixel stream (c:Color r g b))
-    (let rbyte = (floor (* 255.999d0 (linear-to-gamma r))))
-    (let gbyte = (floor (* 255.999d0 (linear-to-gamma g))))
-    (let bbyte = (floor (* 255.999d0 (linear-to-gamma b))))
-    (lisp (-> Void) (stream rbyte gbyte bbyte) 
-      (cl:format stream "~D ~D ~D~%" rbyte gbyte bbyte)
-      (cl:values)))
-  
-  (declare pixel-center (Integer * Integer -> v:Vec3))
+  (declare pixel-center (UFix * UFix -> v:Vec3))
   (define (pixel-center i j)
     (v:vec-add PIXEL-00-LOC
                  (v:vec-add (v:vec-mul-scalar PIXEL-DELTA-U (unwrap-as F64 i)) 
                             (v:vec-mul-scalar PIXEL-DELTA-V (unwrap-as F64 j)))))
   
-  (declare write-pixels (file:FileStream Char -> Void))
-  (define (write-pixels stream)
+  (declare generate-pixel (UFix * UFix -> c:Color))
+  (define (generate-pixel x y)
+    (for ((sample 0 (1+ sample)) 
+           (pixel-color c:black 
+                        (c:add pixel-color (ray-color (get-ray x y) MAX_DEPTH))))
+         :returns (c:mul-scalar pixel-color PIXEL-SAMPLES-SCALE)
+         :repeat SAMPLES-PER-PIXEL))
+
+  (declare sync-main (Void -> Void))
+  (define (sync-main)
+    (let image-buffer = (la:make (* IMAGE-HEIGHT IMAGE-WIDTH) (c:Color 1.0d0 0.0d0 0.0d0)))
     (for* ((y 0 (1+ y)))
-         :repeat (unwrap-as UFix IMAGE-HEIGHT)
+         :repeat IMAGE-HEIGHT
          (print (<> "Scanlines remaining: " (into (- IMAGE-HEIGHT y))))
          (for* ((x 0 (1+ x)))
-              :repeat (unwrap-as UFix IMAGE-WIDTH)
-               (let color = 
-                 (for ((sample 0 (1+ sample)) 
-                        (pixel-color (c:black) 
-                                     (c:add pixel-color (ray-color (get-ray x y) MAX_DEPTH))))
-                      :returns (c:mul-scalar pixel-color PIXEL-SAMPLES-SCALE)
-                      :repeat (unwrap-as UFix SAMPLES-PER-PIXEL)
-                      ))
-              (write-pixel stream color))))
+              :repeat IMAGE-WIDTH
+              (let color = (generate-pixel x y))
+              (let offset = (+ x (* y IMAGE-WIDTH)))
+              (la:set! image-buffer offset color)))
+     (ppm:save-image image-buffer IMAGE-WIDTH IMAGE-HEIGHT COLORS))
   
-  
-  (declare write-header (file:FileStream Char -> Void)) 
-  (define (write-header stream)
-    (lisp (-> Void) (stream)
-      (cl:format stream "P3~%~D ~D~%~D~%" IMAGE-WIDTH IMAGE-HEIGHT COLORS)
-      (cl:values)))
-  
-  (declare save-image (Void -> (Result file:FileError UFix)))
-  (define (save-image)
-    (file:with-open-file "out.ppm"
-      (fn (stream)
-        (write-header stream)
-        (write-pixels stream)
-        (Ok 0))
-      :direction file::Output
-      :if-exists file::Overwrite))
+  (declare threaded-main (Void -> Void))
+  (define (threaded-main)
+    (let image-buffer = (la:make (* IMAGE-HEIGHT IMAGE-WIDTH) (c:Color 1.0d0 0.0d0 0.0d0)))
+    (run-io! 
+      (do 
+        ;; Setup the worker pool
+        (scheduler <- (new-ring-buffer-scheduler NUM-THREADS))
+        (pool <- (new-worker-pool_ NUM-THREADS scheduler))
+        ;; Send off the work
+        (do-loop-times (y IMAGE-HEIGHT)
+          (io/term:write-line (<> "Scanlines remaining: " (into (- IMAGE-HEIGHT y))))
+            (do-submit-job_ pool
+              (wrap-io
+                (coalton/experimental/loops:dotimes 
+                  (x IMAGE-WIDTH)
+                  (let color = (generate-pixel x y))
+                  (let offset = (+ x (* y IMAGE-WIDTH)))
+                  (la:set! image-buffer offset color))
+                Unit)))
+        ;; Wait for finish, then cleanup
+        (request-shutdown pool)
+        (await pool)))
+     (ppm:save-image image-buffer IMAGE-WIDTH IMAGE-HEIGHT COLORS))
 
+  
   (declare main (Void -> Void))
-  (define (main)
-    (match (save-image)
-      ((Ok _) (print "Wrote file!"))
-      ((Err errored)
-        (match errored
-          ((file:FileError str) (print "File error: ") 
-                                (print str))
-          (_None (print "Unknown error occurred")))))))
+  (define (main) 
+    (threaded-main))
+)

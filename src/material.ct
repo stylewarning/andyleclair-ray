@@ -3,6 +3,7 @@
                (:local-nicknames (#:v #:ray/vec3)
                                  (#:r #:ray/ray)
                                  (#:c #:ray/color)
+                                 (#:util #:ray/util)
                                  (#:math #:coalton/math))
                (:export #:Material
                         #:Lambertian
@@ -35,7 +36,7 @@
                                    (v:vec-mul-scalar (v:random-unit-vector) fuzz)))
     (if (> (v:vec-dot re-reflected normal) 0)
         (values (Some (r:Ray point re-reflected)) albedo)
-        (values None (c:black))))
+        (values None c:black)))
   
   (declare scatter-dielectric (v:Vec3 * v:Vec3 * v:Vec3 * Boolean * F64 -> Optional r:Ray * c:Color))
   (define (scatter-dielectric direction point normal front-face? refraction-index)
@@ -46,10 +47,10 @@
     (let cannot-refract = (> (* ri sin-theta) 1.0d0))
     ; If the material cannot refract it must reflect
     (let direction = (if (or cannot-refract 
-                             (> (reflectance cos-theta ri) (rand-f64)))
+                             (> (reflectance cos-theta ri) (util:rand-f64)))
                          (v:reflect unit-direction normal)
                          (v:refract unit-direction normal ri)))
-    (values (Some (r:Ray point direction)) (c:white)))
+    (values (Some (r:Ray point direction)) c:white))
   
   (declare reflectance (F64 * F64 -> F64))
   (define (reflectance cosine refraction-index)
@@ -57,10 +58,6 @@
     (let r0 = (/ (- 1.0d0 refraction-index) (+ 1.0d0 refraction-index)))
     (let r0-sq = (* r0 r0))
     (+ r0-sq (* (- 1.0d0 r0-sq) (^ (- 1.0d0 cosine) 5))))
-  
-  (declare rand-f64 (Void -> F64))
-  (define (rand-f64)
-    (lisp (-> F64) () (cl:random 1.0d0)))
   
   (declare scatter (r:Ray * v:Vec3 * v:Vec3 * Boolean * Material -> Optional r:Ray * c:Color))
   (define (scatter (r:Ray _ direction) point normal front-face? material)

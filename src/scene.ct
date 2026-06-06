@@ -1,0 +1,73 @@
+(cl:defpackage #:ray/scene 
+               (:use #:coalton #:coalton-prelude)
+               (:local-nicknames 
+                 (#:trig #:coalton/math/elementary)
+                 (#:integ #:coalton/math/integral)
+                 (#:it #:coalton/iterator)
+                 (#:s #:ray/sphere)
+                 (#:m #:ray/material)
+                 (#:c #:ray/color)
+                 (#:v #:ray/vec3)
+                 (#:util #:ray/util))
+               (:export #:basic-world
+                        #:small-world
+                        #:complex-world))
+
+(cl:in-package #:ray/scene)
+
+(coalton-toplevel
+  
+  (declare complex-world (List s:Sphere))
+  (define complex-world 
+    (fold (fn (acc i)
+            (let x = (- (integ:mod i 21) 10))
+            (let z = (- (/ i 21) 6))
+            (let choose-mat = (util:rand-f64))
+            (let center = (v:Vec3 (+ x (* 0.9d0 (util:rand-f64)))
+                                  0.2d0
+                                  (+ z (* 0.9d0 (util:rand-f64)))))
+            (if (< 0.9d0 (v:vec-length (v:vec-sub center (v:Vec3 4.0d0 0.2d0 0.0d0))))
+                (cons (if (< choose-mat 0.8d0)
+                          (s:Sphere center 0.2d0 (m:Lambertian (rand-color)))
+                          (if (< choose-mat 0.95d0)
+                              (s:Sphere center 0.2d0 (m:Metal (rand-color) (util:rand-f64-range 0.0d0 0.5d0)))
+                              (s:Sphere center 0.2d0 (m:Dielectric 1.5d0))))
+                      acc)
+                acc))
+          [
+          ; Big ass world sphere
+          (s:Sphere (v:Vec3 0.0d0 -1000.0d0 0.0d0) 1000.0d0 (m:Lambertian (c:Color 0.5d0 0.5d0 0.5d0)))
+          
+          ; 3 med-big spheres
+          (s:Sphere (v:Vec3 0.0d0 1.0d0 0.0d0) 1.0d0 (m:Dielectric 1.5d0))
+          (s:Sphere (v:Vec3 -4.0d0 1.0d0 0.0d0) 1.0d0 (m:Lambertian (c:Color 0.4d0 0.2d0 0.1d0)))
+          (s:Sphere (v:Vec3 4.0d0 1.0d0 0.0d0) 1.0d0 (m:Metal (c:Color 0.7d0 0.6d0 0.5d0) 0.0d0))
+          ]
+          (the (List F64) (it:collect! (it:range-increasing 1 1 200)))))
+  
+  (declare basic-world (List s:Sphere))
+  (define basic-world [
+    ; Big ass world sphere
+    (s:Sphere (v:Vec3 0.0d0 -100.5d0 -1.0d0) 100.0d0 (m:Lambertian (c:Color 0.8d0 0.8d0 0.0d0)))
+    ; Center
+    (s:Sphere (v:Vec3 0.0d0 0.0d0 -1.2d0) 0.5d0 (m:Lambertian (c:Color 0.1d0 0.2d0 0.5d0)))
+    ; Left
+    (s:Sphere (v:Vec3 -1.0d0 0.0d0 -1.0d0) 0.5d0 (m:Dielectric 1.5d0))
+    ; Bubble
+    (s:Sphere (v:Vec3 -1.0d0 0.0d0 -1.0d0) 0.4d0 (m:Dielectric (/ 1.0d0 1.5d0)))
+    ; Right
+    (s:Sphere (v:Vec3 1.0d0 0.0d0 -1.0d0) 0.5d0 (m:Metal (c:Color 0.8d0 0.6d0 0.2d0) 1.0d0))
+  ])
+  
+  (declare R F64)
+  (define R (trig:cos (/ (the F64 trig:pi) 4.0d0)))
+  
+  (declare SMALL-WORLD (List s:Sphere))
+  (define SMALL-WORLD [
+    (s:Sphere (v:Vec3 (negate R) 0 -1) R (m:Lambertian (c:Color 0.0d0 0.0d0 1.0d0)))
+    (s:Sphere (v:Vec3 R 0 -1) R (m:Lambertian (c:Color 1.0d0 0.0d0 0.0d0)))
+  ])
+  
+  (declare rand-color (Void -> c:Color))
+  (define (rand-color) (c:Color (util:rand-f64) (util:rand-f64) (util:rand-f64)))
+)

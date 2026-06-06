@@ -1,6 +1,7 @@
 (cl:defpackage #:ray/vec3
   (:use #:coalton #:coalton-prelude)
-  (:local-nicknames (#:math #:coalton/math))
+  (:local-nicknames (#:math #:coalton/math)
+                    (#:util #:ray/util))
   (:export #:Vec3
            #:random
            #:random-within
@@ -28,18 +29,18 @@
 (cl:declaim (cl:optimize (cl:speed 3) (cl:safety 0) (cl:debug 0)))
 
 (coalton-toplevel
-  (define-struct Vec3
-    (x F64)
-    (y F64)
-    (z F64))
+  
+  (define-type Vec3 (Vec3 F64 F64 F64))
   
   (declare random (Void -> Vec3))
   (define (random)
-    (Vec3 (rand-f64) (rand-f64) (rand-f64)))
+    (Vec3 (util:rand-f64) (util:rand-f64) (util:rand-f64)))
   
   (declare random-within (F64 * F64 -> Vec3))
   (define (random-within min max)
-    (Vec3 (rand-f64-range min max) (rand-f64-range min max) (rand-f64-range min max)))
+    (Vec3 (util:rand-f64-range min max)
+          (util:rand-f64-range min max)
+          (util:rand-f64-range min max)))
   
   (declare random-unit-vector (Void -> Vec3))
   (define (random-unit-vector)
@@ -59,14 +60,14 @@
   
   (declare random-in-unit-disk (Void -> Vec3))
   (define (random-in-unit-disk)
-    (let p = (Vec3 (rand-f64-range -1.0d0 1.0d0) (rand-f64-range -1.0d0 1.0d0) 0.0d0))
+    (let p = (Vec3 (util:rand-f64-range -1.0d0 1.0d0) (util:rand-f64-range -1.0d0 1.0d0) 0.0d0))
     (if (< (vec-length-squared p) 1.0d0)
         p
         (random-in-unit-disk)))
   
   (declare reflect (Vec3 * Vec3 -> Vec3))
   (define (reflect v n)
-    (vec-sub v (vec-mul-scalar n (* (vec-dot v n) 2))))
+    (vec-sub v (vec-mul-scalar n (* (vec-dot v n) 2.0d0))))
   
   (declare refract (Vec3 * Vec3 * F64 -> Vec3))
   (define (refract uv n etai-over-etat)
@@ -138,14 +139,5 @@
   (declare vec-negate (Vec3 -> Vec3))
   (define (vec-negate (Vec3 x y z))
     (Vec3 (negate x) (negate y) (negate z)))
-  
-  
-  (declare rand-f64 (Void -> F64))
-  (define (rand-f64)
-    (lisp (-> F64) () (cl:random 1.0d0)))
-  
-  (declare rand-f64-range (F64 * F64 -> F64))
-  (define (rand-f64-range min max)
-    (+ min (* (- max min) (rand-f64))))
 
 )
