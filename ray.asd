@@ -1,6 +1,6 @@
 (asdf:defsystem "ray"
   :defsystem-depends-on ("coalton-asdf")
-  :depends-on ("coalton" "sb-simd" "coalton-io" "cffi")
+  :depends-on ("coalton" "sb-simd" "coalton/threads" "cffi")
   :pathname "src/"
   :serial t
   :components

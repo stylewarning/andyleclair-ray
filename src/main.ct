@@ -1,14 +1,10 @@
 (cl:defpackage #:ray
   (:use #:coalton 
-        #:coalton-prelude
-        #:io/monad-io
-        #:io/simple-io
-        #:io/thread
-        #:io/conc/ring-buffer
-        #:io/conc/worker-pool)
-  (:import-from #:coalton/experimental/do-control-loops
-                #:do-loop-times)
+        #:coalton-prelude)
   (:local-nicknames
+    (#:par #:coalton/threads/parallel)
+    (#:atomic #:coalton/threads/atomic)
+    (#:mutex #:coalton/threads/mutex)
     (#:file #:coalton/file)
     (#:it #:coalton/iterator)
     (#:list #:coalton/list)
@@ -146,17 +142,74 @@
   (define (sample-square)
     (values (- (util:rand-f64) 0.5d0) (- (util:rand-f64) 0.5d0)))
   
+  (define-struct SceneArrays
+    "Sphere data laid out as flat arrays for fast intersection scans."
+    (cx (la:LispArray F64))
+    (cy (la:LispArray F64))
+    (cz (la:LispArray F64))
+    (rr (la:LispArray F64))
+    (spheres (la:LispArray s:Sphere)))
+
+  (declare fill-scene-arrays (SceneArrays * UFix * List s:Sphere -> Unit))
+  (define (fill-scene-arrays arrs i spheres)
+    (match spheres
+      ((Nil) Unit)
+      ((Cons sph rest)
+       (let (v:Vec3 x y z) = (.center sph))
+       (la:set! (.cx arrs) i x)
+       (la:set! (.cy arrs) i y)
+       (la:set! (.cz arrs) i z)
+       (la:set! (.rr arrs) i (* (.radius sph) (.radius sph)))
+       (la:set! (.spheres arrs) i sph)
+       (fill-scene-arrays arrs (1+ i) rest))))
+
+  (declare SCENE SceneArrays)
+  (define SCENE
+    (match scene:complex-world
+      ((Nil) (error "empty scene"))
+      ((Cons first _)
+       (let n = (list:length scene:complex-world))
+       (let arrs = (SceneArrays (la:make n 0.0d0) (la:make n 0.0d0) (la:make n 0.0d0)
+                                (la:make n 0.0d0) (la:make n first)))
+       (fill-scene-arrays arrs 0 scene:complex-world)
+       arrs)))
+
+  (declare scan-spheres (la:LispArray F64 * la:LispArray F64 * la:LispArray F64 * la:LispArray F64 *
+                         F64 * F64 * F64 * F64 * F64 * F64 * F64 * F64 *
+                         UFix * UFix * F64 * F64 * UFix -> F64 * UFix))
+  (define (scan-spheres cx cy cz rr ox oy oz dx dy dz a tmin n i closest best-t best-i)
+    "Find the closest sphere hit, returning its root (or -1) and index."
+    (if (>= i n)
+        (values best-t best-i)
+        (progn
+          (let ocx = (- (la:aref cx i) ox))
+          (let ocy = (- (la:aref cy i) oy))
+          (let ocz = (- (la:aref cz i) oz))
+          (let h = (+ (* dx ocx) (+ (* dy ocy) (* dz ocz))))
+          (let c = (- (+ (* ocx ocx) (+ (* ocy ocy) (* ocz ocz))) (la:aref rr i)))
+          (let discriminant = (- (* h h) (* a c)))
+          (if (< discriminant 0.0d0)
+              (scan-spheres cx cy cz rr ox oy oz dx dy dz a tmin n (1+ i) closest best-t best-i)
+              (progn
+                (let sqrtd = (sqrt discriminant))
+                (let minus-root = (/ (- h sqrtd) a))
+                (let pos-root = (/ (+ h sqrtd) a))
+                (if (or (or (<= minus-root tmin) (<= closest minus-root))
+                        (or (<= pos-root tmin) (<= closest pos-root)))
+                    (scan-spheres cx cy cz rr ox oy oz dx dy dz a tmin n (1+ i) closest best-t best-i)
+                    (scan-spheres cx cy cz rr ox oy oz dx dy dz a tmin n (1+ i) minus-root minus-root i)))))))
+
   (declare hit-any? (r:Ray * F64 * F64 -> Optional h:HitRecord))
   (define (hit-any? ray tmin tmax)
-    (let (Tuple closest-hit _) =
-      (fold 
-        (fn ((Tuple hit-rec closest-so-far) obj) 
-          (match (h:hit? obj ray tmin closest-so-far)
-            ((Some hit) (Tuple (Some hit) (.t hit)))
-            ((None) (Tuple hit-rec closest-so-far))))
-        (Tuple None tmax) 
-        scene:complex-world))
-    closest-hit)
+    (let (r:Ray (v:Vec3 ox oy oz) (v:Vec3 dx dy dz)) = ray)
+    (let a = (+ (* dx dx) (+ (* dy dy) (* dz dz))))
+    (let sc = SCENE)
+    (let (values best-t best-i) =
+      (scan-spheres (.cx sc) (.cy sc) (.cz sc) (.rr sc) ox oy oz dx dy dz a tmin
+                    (la:length (.rr sc)) 0 tmax -1.0d0 0))
+    (if (< best-t 0.0d0)
+        None
+        (Some (s:hit-record (la:aref (.spheres sc) best-i) ray best-t))))
   
   (declare ray-color (r:Ray * UFix -> c:Color))
   (define (ray-color r depth)
@@ -208,26 +261,24 @@
   (declare threaded-main (Void -> Void))
   (define (threaded-main)
     (let image-buffer = (la:make (* IMAGE-HEIGHT IMAGE-WIDTH) (c:Color 1.0d0 0.0d0 0.0d0)))
-    (run-io! 
-      (do 
-        ;; Setup the worker pool
-        (scheduler <- (new-ring-buffer-scheduler NUM-THREADS))
-        (pool <- (new-worker-pool_ NUM-THREADS scheduler))
-        ;; Send off the work
-        (do-loop-times (y IMAGE-HEIGHT)
-          (io/term:write-line (<> "Scanlines remaining: " (into (- IMAGE-HEIGHT y))))
-            (do-submit-job_ pool
-              (wrap-io
-                (coalton/experimental/loops:dotimes 
-                  (x IMAGE-WIDTH)
-                  (let color = (generate-pixel x y))
-                  (let offset = (+ x (* y IMAGE-WIDTH)))
-                  (la:set! image-buffer offset color))
-                Unit)))
-        ;; Wait for finish, then cleanup
-        (request-shutdown pool)
-        (await pool)))
-     (ppm:save-image image-buffer IMAGE-WIDTH IMAGE-HEIGHT COLORS))
+    (let remaining = (atomic:new IMAGE-HEIGHT))
+    (let print-lock = (mutex:new))
+    (par:set-worker-count! NUM-THREADS)
+    (par:for-range! 0 IMAGE-HEIGHT
+      (fn (y)
+        (util:with-fresh-random-state
+          (fn ()
+            (coalton/experimental/loops:dotimes 
+              (x IMAGE-WIDTH)
+              (let color = (generate-pixel x y))
+              (let offset = (+ x (* y IMAGE-WIDTH)))
+              (la:set! image-buffer offset color))
+            Unit))
+        (let left = (atomic:decrement! remaining))
+        (mutex:with-lock print-lock
+          (fn () (print (<> "Scanlines remaining: " (into left)))))
+        (values)))
+    (ppm:save-image image-buffer IMAGE-WIDTH IMAGE-HEIGHT COLORS))
 
   
   (declare main (Void -> Void))
