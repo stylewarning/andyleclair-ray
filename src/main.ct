@@ -4,7 +4,7 @@
         #:io/monad-io
         #:io/simple-io
         #:io/thread
-        #:io/conc/ring-buffer
+        #:io/conc/scheduler
         #:io/conc/worker-pool)
   (:import-from #:coalton/experimental/do-control-loops
                 #:do-loop-times)
@@ -211,7 +211,7 @@
     (run-io! 
       (do 
         ;; Setup the worker pool
-        (scheduler <- (new-ring-buffer-scheduler NUM-THREADS))
+        (scheduler <- (new-bounded-scheduler NUM-THREADS))
         (pool <- (new-worker-pool_ NUM-THREADS scheduler))
         ;; Send off the work
         (do-loop-times (y IMAGE-HEIGHT)
