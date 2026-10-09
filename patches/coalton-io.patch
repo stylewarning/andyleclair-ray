@@ -1,0 +1,642 @@
+Port of coalton-io (https://github.com/Jason94/coalton-io, master 24dd9b0) to current Coalton.
+Apply with: git -C coalton-io apply /path/to/coalton-io.patch
+
+diff --git a/src/classes/exceptions.lisp b/src/classes/exceptions.lisp
+index 7a96705..f14963f 100644
+--- a/src/classes/exceptions.lisp
++++ b/src/classes/exceptions.lisp
+@@ -1,5 +1,6 @@
+ (cl:in-package :cl-user)
+ (defpackage :io/classes/exceptions
++  (:shadow #:handle)
+   (:use
+    #:coalton
+    #:coalton-prelude
+@@ -76,7 +77,7 @@
+ must catch and wrap all unhandled errors inside a wrap-io call."
+     (raise
+      "Raise an exception."
+-     ((RuntimeRepr :e) (Signalable :e) => :e -> :m :a))
++     ((RuntimeRepr :e) (Exception :e) => :e -> :m :a))
+     (raise-dynamic
+      "Raise an exception wrapped in a Dynamic. Mainly useful to hand-off eexceptions
+ between IO instances."
+@@ -115,7 +116,7 @@ raised any exceptions."
+      (fn () (pure None))))
+ 
+   (inline)
+-  (declare raise-result ((Exceptions :m) (RuntimeRepr :e) (Signalable :e)
++  (declare raise-result ((Exceptions :m) (RuntimeRepr :e) (Exception :e)
+                          => :m (Result :e :a) -> :m :a))
+   (define (raise-result io-res)
+     "Raise any (Err :e) into :m. Useful if (Err :e) represents any unhandleable, fatal
+diff --git a/src/classes/file.lisp b/src/classes/file.lisp
+index 9c74412..f492b13 100644
+--- a/src/classes/file.lisp
++++ b/src/classes/file.lisp
+@@ -73,10 +73,10 @@
+            -> :m (Result file:FileError (file:FileStream :a))))
+     (close
+      "Closes a FileStream."
+-     ((file:FileStream :a) -> :m (Result file:FileError :b)))
++     ((file:FileStream :a) -> :m (Result file:FileError Unit)))
+     (abort
+      "Closes a FileStream and aborts all operations.."
+-     ((file:FileStream :a) -> :m (Result file:FileError :b)))
++     ((file:FileStream :a) -> :m (Result file:FileError Unit)))
+ 
+     (create-temp-directory
+      (:m (Result file:FileError file:Pathname)))
+@@ -94,7 +94,7 @@
+      (Into :p file:Pathname => :p -> :m (Result file:FileError Unit)))
+     (remove-directory
+      "Deletes an empty directory."
+-     (Into :p file:Pathname => :p -> :m (Result file:FileError :p)))
++     (Into :p file:Pathname => :p -> :m (Result file:FileError Unit)))
+     (remove-directory-recursive
+      "Deletes a target directory recursively. Equivalent to `rm -r`. Errors if the path is not a directory."
+      (Into :p file:Pathname => :p -> :m (Result file:FileError Unit)))
+diff --git a/src/classes/monad-io.lisp b/src/classes/monad-io.lisp
+index e6da157..f49d24e 100644
+--- a/src/classes/monad-io.lisp
++++ b/src/classes/monad-io.lisp
+@@ -54,7 +54,10 @@
+      "Wrap a (potentially) side-effectful function in the monad."
+      ((Void -> :a) -> :m :a)))
+ 
+-  (define-class (MonadIo :m => BaseIo :m)
++  (define-class (Monad :m => LiftIo :i :m)
++    (lift-io (:i :a -> :m :a)))
++
++  (define-class ((MonadIo :m) (LiftIo :m :m) => BaseIo :m)
+     "A 'base' IO implementation, which can be run to execute some
+ (potentially side-effectful) operation."
+     (run!
+@@ -66,19 +69,13 @@ exceptions."
+ exceptions as an (Err e)."
+      (:m :a -> Result Dynamic :a)))
+ 
+-  (define-class ((Monad :m) (BaseIo :i) => LiftIo :i :m)
+-    (lift-io (BaseIo :i => :i :a -> :m :a)))
+-
+-  (define-class ((MonadIo :m) (LiftIo :i :m) => UnliftIo :m :i (:m -> :i))
++  (define-class ((MonadIo :m) (LiftIo :i :m) (BaseIo :i) => UnliftIo :m :i (:m -> :i))
+     (with-run-in-io (((:m :a -> :i :a) -> :i :b) -> :m :b)))
+ 
+   ;;;
+   ;;; Define Core Instances
+   ;;;
+ 
+-  (define-instance (BaseIo :i => LiftIo :i :i)
+-    (inline)
+-    (define lift-io id))
+   )
+ 
+ ;;;
+diff --git a/src/classes/network.lisp b/src/classes/network.lisp
+index e548089..e04c75c 100644
+--- a/src/classes/network.lisp
++++ b/src/classes/network.lisp
+@@ -53,13 +53,7 @@
+   (define-exception NetworkException
+     (EndOfFileException Unit))
+ 
+-  (define-instance (Signalable NetworkException)
+-    (define (error exc)
+-      (match exc
+-        ((EndOfFileException _)
+-         (error "Attempted to read from closed connection socket.")))))
+-
+-  (repr :native usocket:stream-server-usocket)
++    (repr :native usocket:stream-server-usocket)
+   (define-type ServerSocket
+     "A server socket listening for new connections.")
+ 
+diff --git a/src/classes/thread.lisp b/src/classes/thread.lisp
+index 639a258..4455797 100644
+--- a/src/classes/thread.lisp
++++ b/src/classes/thread.lisp
+@@ -1,5 +1,6 @@
+ (cl:in-package :cl-user)
+ (defpackage :io/classes/thread
++  (:shadowing-import-from #:io/classes/exceptions #:handle)
+   (:use
+    #:coalton
+    #:coalton-prelude
+diff --git a/src/gen-impl/conc/bounded-scheduler.lisp b/src/gen-impl/conc/bounded-scheduler.lisp
+index dab0034..93efaa7 100644
+--- a/src/gen-impl/conc/bounded-scheduler.lisp
++++ b/src/gen-impl/conc/bounded-scheduler.lisp
+@@ -1,5 +1,6 @@
+ (cl:in-package :cl-user)
+ (defpackage :io/gen-impl/conc/bounded-scheduler
++  (:shadowing-import-from #:io/classes/exceptions #:handle)
+   (:use
+    #:coalton
+    #:coalton-prelude
+@@ -23,16 +24,10 @@
+ (named-readtables:in-readtable coalton:coalton)
+ 
+ (coalton-toplevel
+-  (define-type SchedulerError
++  (define-exception SchedulerError
+     InvalidBoundedCapacityError)
+ 
+-  (define-instance (Signalable SchedulerError)
+-    (define (error e)
+-      (match e
+-        ((InvalidBoundedCapacityError)
+-         (error "Bounded scheduler queue must have non-zero capacity")))))
+-
+-  (repr :transparent)
++    (repr :transparent)
+   (define-type (BoundedScheduler :a)
+     "A `BoundedScheduler` has a limited capacity, and task submissions block if full."
+     (BoundedScheduler% (BoundedMpmcQueue :a)))
+diff --git a/src/gen-impl/conc/concurrent-group.lisp b/src/gen-impl/conc/concurrent-group.lisp
+index a505656..bc00d26 100644
+--- a/src/gen-impl/conc/concurrent-group.lisp
++++ b/src/gen-impl/conc/concurrent-group.lisp
+@@ -1,5 +1,6 @@
+ (cl:in-package :cl-user)
+ (defpackage :io/gen-impl/conc/group
++  (:shadowing-import-from #:io/classes/exceptions #:handle)
+   (:use
+    #:coalton
+    #:coalton-prelude
+diff --git a/src/gen-impl/conc/io-atomic.lisp b/src/gen-impl/conc/io-atomic.lisp
+index 2f70656..cb73890 100644
+--- a/src/gen-impl/conc/io-atomic.lisp
++++ b/src/gen-impl/conc/io-atomic.lisp
+@@ -1,5 +1,6 @@
+ (cl:in-package :cl-user)
+ (defpackage :io/gen-impl/conc/atomic
++  (:shadowing-import-from #:io/classes/exceptions #:handle)
+   (:use
+    #:coalton
+    #:coalton-prelude
+diff --git a/src/gen-impl/conc/io-future.lisp b/src/gen-impl/conc/io-future.lisp
+index 085d0f6..b0b5624 100644
+--- a/src/gen-impl/conc/io-future.lisp
++++ b/src/gen-impl/conc/io-future.lisp
+@@ -1,5 +1,6 @@
+ (cl:in-package :cl-user)
+ (defpackage :io/gen-impl/conc/future
++  (:shadowing-import-from #:io/classes/exceptions #:handle)
+   (:use
+    #:coalton
+    #:coalton-prelude
+diff --git a/src/gen-impl/conc/io-mvar.lisp b/src/gen-impl/conc/io-mvar.lisp
+index 97e61de..1e9dbfb 100644
+--- a/src/gen-impl/conc/io-mvar.lisp
++++ b/src/gen-impl/conc/io-mvar.lisp
+@@ -1,5 +1,6 @@
+ (cl:in-package :cl-user)
+ (defpackage :io/gen-impl/conc/mvar
++  (:shadowing-import-from #:io/classes/exceptions #:handle)
+   (:use
+    #:coalton
+    #:coalton-prelude
+diff --git a/src/gen-impl/conc/queues/bounded-mpmc.lisp b/src/gen-impl/conc/queues/bounded-mpmc.lisp
+index e6e040b..36d96ea 100644
+--- a/src/gen-impl/conc/queues/bounded-mpmc.lisp
++++ b/src/gen-impl/conc/queues/bounded-mpmc.lisp
+@@ -1,5 +1,6 @@
+ (cl:in-package :cl-user)
+ (defpackage :io/gen-impl/conc/queues/bounded-mpmc
++  (:shadowing-import-from #:io/classes/exceptions #:handle)
+   (:use
+    #:coalton
+    #:coalton-prelude
+@@ -11,6 +12,7 @@
+    #:io/classes/runtime-utils
+    #:io/gen-impl/conc/queues
+    )
++  (:import-from #:io/utils #:InvalidArgument)
+   (:local-nicknames
+    (:opt #:coalton-library/optional)
+    (:v #:coalton-library/vector)
+@@ -285,7 +287,7 @@ Concurrent:
+   (define (new-bounded-mpmc-queue capacity)
+     "Create a new bounded MPMC queue with the given capacity."
+     (if (zero? capacity)
+-        (raise "Cannot create a bounded queue with no capacity.")
++        (raise (InvalidArgument "Cannot create a bounded queue with no capacity."))
+         (wrap-io (new-bounded-mpmc-queue% capacity))))
+ 
+   (define-instance (Queue BoundedMpmcQueue)
+diff --git a/src/gen-impl/conc/stm.lisp b/src/gen-impl/conc/stm.lisp
+index 8512a71..2b6fe44 100644
+--- a/src/gen-impl/conc/stm.lisp
++++ b/src/gen-impl/conc/stm.lisp
+@@ -1,5 +1,6 @@
+ (cl:in-package :cl-user)
+ (defpackage :io/gen-impl/conc/stm
++  (:shadowing-import-from #:io/classes/exceptions #:handle)
+   (:use
+    #:coalton
+    #:coalton-prelude
+diff --git a/src/gen-impl/conc/worker-pool.lisp b/src/gen-impl/conc/worker-pool.lisp
+index 35c1a5a..e547fd9 100644
+--- a/src/gen-impl/conc/worker-pool.lisp
++++ b/src/gen-impl/conc/worker-pool.lisp
+@@ -1,5 +1,6 @@
+ (cl:in-package :cl-user)
+ (defpackage :io/gen-impl/conc/worker-pool
++  (:shadowing-import-from #:io/classes/exceptions #:handle)
+   (:use
+    #:coalton
+    #:coalton-prelude
+@@ -79,7 +80,7 @@
+     ;;   structured concurrency keeps the forked threads from being orphaned.
+     (do
+      (do-when (zero? n-threads)
+-       (raise "Worker pool must be initialized with non-zero threads."))
++       (raise (InvalidArgument "Worker pool must be initialized with non-zero threads.")))
+      (threads <- (lift-io (fork-group
+                            (map (fn (i) (fork-worker-op i scheduler))
+                                 (l:range 0 (1- n-threads))))))
+@@ -192,9 +193,9 @@ Concurrent:
+     while the scheduler is full."
+     (cond
+       ((> start end)
+-       (raise "Error: `start` must come before `end`"))
++       (raise (InvalidArgument "Error: `start` must come before `end`")))
+       ((zero? chunk-size)
+-       (raise "Error: `chunk-size` cannot be 0"))
++       (raise (InvalidArgument "Error: `chunk-size` cannot be 0")))
+       ((== start end)
+        (pure Unit))
+       (True
+diff --git a/src/gen-impl/io-file.lisp b/src/gen-impl/io-file.lisp
+index bcc962d..d864d3d 100644
+--- a/src/gen-impl/io-file.lisp
++++ b/src/gen-impl/io-file.lisp
+@@ -1,5 +1,6 @@
+ (cl:in-package :cl-user)
+ (defpackage :io/gen-impl/file
++  (:shadowing-import-from #:io/classes/exceptions #:handle)
+   (:use
+    #:coalton
+    #:coalton-prelude
+@@ -14,6 +15,7 @@
+   (:import-from #:coalton-library/monad/classes
+    #:LiftTo #:lift-to)
+   (:local-nicknames
++   (:r #:coalton-library/result)
+    (:f_ #:coalton-library/file)
+    )
+   (:export
+@@ -25,6 +27,7 @@
+    #:do-with-open-file
+    #:do-with-temp-file
+    #:do-with-temp-directory
++   #:FileException
+ 
+    ;; Library Private
+    #:exists?%
+@@ -59,6 +62,15 @@
+ 
+ (named-readtables:in-readtable coalton:coalton)
+ 
++(coalton-toplevel
++  (define-exception FileException
++    "A `FileError` raised from an IO operation."
++    (FileException f_:FileError))
++
++  (declare raise-file-result ((Exceptions :m) => :m (Result f_:FileError :a) -> :m :a))
++  (define (raise-file-result op)
++    (raise-result (map (fn (res) (r:map-err FileException res)) op))))
++
+ (coalton-toplevel
+ 
+   (declare exists?% ((Into :a f_:Pathname) (MonadIo :m) => :a -> :m (Result f_:FileError Boolean)))
+@@ -82,11 +94,11 @@
+   (define (open% pth &key (direction f_:Input) (if-exists f_:EError))
+     (wrap-io (f_:open pth :direction direction :if-exists if-exists)))
+ 
+-  (declare close% (MonadIo :m => (f_:FileStream :a) -> :m (Result f_:FileError :b)))
++  (declare close% (MonadIo :m => (f_:FileStream :a) -> :m (Result f_:FileError Unit)))
+   (define (close% fs)
+     (wrap-io (f_:close fs)))
+ 
+-  (declare abort% (MonadIo :m => (f_:FileStream :a) -> :m (Result f_:FileError :b)))
++  (declare abort% (MonadIo :m => (f_:FileStream :a) -> :m (Result f_:FileError Unit)))
+   (define (abort% fs)
+     (wrap-io (f_:abort fs)))
+ 
+@@ -102,7 +114,7 @@
+   (define (delete-file% p)
+     (wrap-io (f_:delete-file! p)))
+ 
+-  (declare remove-directory% ((Into :p f_:Pathname) (MonadIo :m) => :p -> :m (Result f_:FileError :p)))
++  (declare remove-directory% ((Into :p f_:Pathname) (MonadIo :m) => :p -> :m (Result f_:FileError Unit)))
+   (define (remove-directory% p)
+     (wrap-io (f_:remove-directory! p)))
+ 
+@@ -226,9 +238,9 @@ in some cases. Try WITH-OPEN-FILE_ if you have issues."
+          (fn (run)
+            (lift-io
+             (bracket-lifecycle-masked
+-             (raise-result (open (as f_:Pathname pth) :direction direction :if-exists if-exists))
++             (raise-file-result (open (as f_:Pathname pth) :direction direction :if-exists if-exists))
+              (fn (file)
+-               (raise-result (close file)))
++               (raise-file-result (close file)))
+              (fn (file)
+                (run (op file)))))))))
+ 
+@@ -249,9 +261,9 @@ in some cases. Try WITH-TEMP-FILE_ if you have issues."
+            (lift-io
+             (let ((filepath (f_::%make-temp-file-pathname extension)))
+               (bracket-lifecycle-masked
+-               (raise-result (open filepath :direction f_:Bidirectional :if-exists f_:Overwrite))
++               (raise-file-result (open filepath :direction f_:Bidirectional :if-exists f_:Overwrite))
+                (fn (_)
+-                 (raise-result (delete-file filepath)))
++                 (raise-file-result (delete-file filepath)))
+                (fn (file)
+                  (run (op file))))))))))
+ 
+@@ -269,7 +281,7 @@ in some cases. Try WITH-TEMP-DIRECTORY_ if you have issues."
+          (fn (run)
+            (lift-io
+             (bracket-lifecycle-masked
+-             (raise-result create-temp-directory)
++             (raise-file-result create-temp-directory)
+              (fn (pathname)
+                (remove-directory-recursive pathname))
+              (fn (pathname)
+diff --git a/src/gen-impl/io-network.lisp b/src/gen-impl/io-network.lisp
+index c2cd57d..d9b1910 100644
+--- a/src/gen-impl/io-network.lisp
++++ b/src/gen-impl/io-network.lisp
+@@ -1,5 +1,6 @@
+ (cl:in-package :cl-user)
+ (defpackage :io/gen-impl/network
++  (:shadowing-import-from #:io/classes/exceptions #:handle)
+   (:use
+    #:coalton
+    #:coalton-prelude
+diff --git a/src/gen-impl/io-thread.lisp b/src/gen-impl/io-thread.lisp
+index 2b8ffc4..208a7b9 100644
+--- a/src/gen-impl/io-thread.lisp
++++ b/src/gen-impl/io-thread.lisp
+@@ -1,5 +1,6 @@
+ (cl:in-package :cl-user)
+ (defpackage :io/gen-impl/thread
++  (:shadowing-import-from #:io/classes/exceptions #:handle)
+   (:use
+    #:coalton
+    #:coalton-prelude
+diff --git a/src/io-exception.lisp b/src/io-exception.lisp
+index 8d01d3d..42eae26 100644
+--- a/src/io-exception.lisp
++++ b/src/io-exception.lisp
+@@ -1,5 +1,6 @@
+ (cl:in-package :cl-user)
+ (defpackage :io/exceptions
++  (:shadowing-import-from #:io/classes/exceptions #:handle)
+   (:use
+    #:coalton
+    #:coalton-prelude
+diff --git a/src/io-impl/conc/worker-pool.lisp b/src/io-impl/conc/worker-pool.lisp
+index b070895..decb2d7 100644
+--- a/src/io-impl/conc/worker-pool.lisp
++++ b/src/io-impl/conc/worker-pool.lisp
+@@ -1,5 +1,6 @@
+ (cl:in-package :cl-user)
+ (defpackage :io/io-impl/conc/worker-pool
++  (:shadowing-import-from #:io/classes/exceptions #:handle)
+   (:use
+    #:coalton
+    #:coalton-prelude
+diff --git a/src/io-impl/io-runtime/runtime.lisp b/src/io-impl/io-runtime/runtime.lisp
+index 846f3b3..8616364 100644
+--- a/src/io-impl/io-runtime/runtime.lisp
++++ b/src/io-impl/io-runtime/runtime.lisp
+@@ -1,5 +1,6 @@
+ (cl:in-package :cl-user)
+ (defpackage :io/io-impl/io-runtime/runtime
++  (:shadowing-import-from #:io/classes/exceptions #:handle)
+   (:use
+    #:coalton
+    #:coalton-prelude
+@@ -647,7 +648,7 @@ just be limited to implementing only solutions #2 or #3.
+   (inline)
+   (declare unmask-current-thread-finally-inner!% ((UnmaskFinallyMode -> Void) -> Void))
+   (define (unmask-current-thread-finally-inner!% finally-thunk)
+-    (unmask-finally!% (current-thread!%) finally-thunk))
++    (unmask-finally!% (current-thread!%) (fn (mode) (finally-thunk mode) Unit)))
+ 
+   (inline)
+   (declare unmask-current-thread-finally!% ((UnmaskFinallyMode -> Void) -> Void))
+diff --git a/src/io-impl/io-thread.lisp b/src/io-impl/io-thread.lisp
+index 8d9ceb5..4a37b6c 100644
+--- a/src/io-impl/io-thread.lisp
++++ b/src/io-impl/io-thread.lisp
+@@ -1,5 +1,6 @@
+ (cl:in-package :cl-user)
+ (defpackage :io/io-impl/thread
++  (:shadowing-import-from #:io/classes/exceptions #:handle)
+   (:use
+    #:coalton
+    #:coalton-prelude
+diff --git a/src/io-impl/runtime.lisp b/src/io-impl/runtime.lisp
+index d48a7c9..29d1df7 100644
+--- a/src/io-impl/runtime.lisp
++++ b/src/io-impl/runtime.lisp
+@@ -49,7 +49,7 @@
+       (unmask-current-thread!%))
+     (inline)
+     (define (unmask-finally! _ thread thunk)
+-      (unmask-finally!% thread thunk))
++      (unmask-finally!% thread (fn (mode) (thunk mode) Unit)))
+     (inline)
+     (define (park-current-thread-if! prx with-gen should-park? &key (timeout NoTimeout))
+       (park-current-thread-if!% prx with-gen should-park? :timeout timeout))
+diff --git a/src/io-impl/simple-io.lisp b/src/io-impl/simple-io.lisp
+index 4f4eaa3..ad02581 100644
+--- a/src/io-impl/simple-io.lisp
++++ b/src/io-impl/simple-io.lisp
+@@ -1,5 +1,6 @@
+ (cl:in-package :cl-user)
+ (defpackage :io/io-impl/simple-io
++  (:shadowing-import-from #:io/classes/exceptions #:handle)
+   (:use
+    #:coalton
+    #:coalton-prelude
+@@ -226,10 +227,10 @@ all threads will be stopped by the main thread when `run-io!` completes."
+          (run-io-unhandled! (fa->io-b a))))))
+ 
+   (inline)
+-  (declare raise-io ((RuntimeRepr :e) (Signalable :e) => :e -> IO :a))
++  (declare raise-io ((RuntimeRepr :e) (Exception :e) => :e -> IO :a))
+   (define (raise-io e)
+     (IO% (fn () (throw (HandledError (to-dynamic e)
+-                                     (fn () (error e)))))))
++                                     (fn () (throw e)))))))
+ 
+   (inline)
+   (declare raise-dynamic-io (Dynamic -> IO :a))
+@@ -238,7 +239,7 @@ all threads will be stopped by the main thread when `run-io!` completes."
+                                      (fn () (throw-dynamic dyn)))))))
+ 
+   (inline)
+-  (declare raise-io_ ((RuntimeRepr :e) (Signalable :e) => :e -> IO Unit))
++  (declare raise-io_ ((RuntimeRepr :e) (Exception :e) => :e -> IO Unit))
+   (define raise-io_ raise-io)
+ 
+   (inline)
+@@ -322,6 +323,10 @@ all threads will be stopped by the main thread when `run-io!` completes."
+     (define handle-all handle-all-io)
+     (define try-dynamic try-dynamic-io))
+ 
++  (define-instance (LiftIo IO IO)
++    (inline)
++    (define lift-io id))
++
+   (define-instance (BaseIo IO)
+     (inline)
+     (define run! run-io!)
+diff --git a/src/io-resource.lisp b/src/io-resource.lisp
+index 57e3e47..b1abebd 100644
+--- a/src/io-resource.lisp
++++ b/src/io-resource.lisp
+@@ -1,5 +1,6 @@
+ (cl:in-package :cl-user)
+ (defpackage :io/resource
++  (:shadowing-import-from #:io/classes/exceptions #:handle)
+   (:use
+    #:coalton
+    #:coalton-prelude
+diff --git a/src/thread-exceptions.lisp b/src/thread-exceptions.lisp
+index 1af86c6..7789c26 100644
+--- a/src/thread-exceptions.lisp
++++ b/src/thread-exceptions.lisp
+@@ -35,11 +35,7 @@
+ This type isn't really an exception, it's more of a message."
+     (InterruptCurrentThread String))
+ 
+-  (define-instance (Signalable ThreadingException)
+-    (define (error x)
+-      (error x)))
+-
+-  (declare dynamic-is-threading-exception? (Dynamic -> Boolean))
++    (declare dynamic-is-threading-exception? (Dynamic -> Boolean))
+   (define (dynamic-is-threading-exception? dyn)
+     "Returns true if the dynamic val is a threading exception or an
+ IoError containing a ThreadingException."
+@@ -68,16 +64,7 @@ related problem. Unlike ThreadingException, these are actual exceptions."
+     (JoinedFailedThread Dynamic)
+     (TimeoutException String))
+ 
+-  (define-instance (Signalable SynchronousThreadException)
+-    (define (error x)
+-      (match x
+-        ((JoinedFailedThread inner-err)
+-         (error (build-str "Attempted to join a failed thread. Thread failed with error: "
+-                           (force-string inner-err))))
+-        ((TimeoutException msg)
+-         (error msg)))))
+-
+-  (derive Eq)
++    (derive Eq)
+   (repr :enum)
+   (define-type UnmaskFinallyMode
+     "When a thread unmasks and calls a cleanup operation, the
+diff --git a/src/utilities/bt-compat.lisp b/src/utilities/bt-compat.lisp
+index 5937f3e..39a4a27 100644
+--- a/src/utilities/bt-compat.lisp
++++ b/src/utilities/bt-compat.lisp
+@@ -4,7 +4,7 @@
+    #:coalton
+    #:coalton-prelude
+    )
+-  (:import-from #:coalton-library/system #:LispCondition)
++  (:import-from #:coalton/exception #:LispError)
+   (:local-nicknames
+    )
+   (:export
+@@ -158,7 +158,7 @@ Returns Boolean immediately, True if `lock' was acquired, False otherwise."
+     (lisp (-> Boolean) (lock)
+       (bt2:acquire-lock lock :wait nil)))
+ 
+-  (declare release (Lock -> (Result LispCondition Lock)))
++  (declare release (Lock -> (Result LispError Lock)))
+   (define (release lock)
+     "Release `lock'. It is an error to call this unless
+ the lock has previously been acquired (and not released) by the same
+@@ -166,7 +166,7 @@ thread. If other threads are waiting for the lock, the
+ `acquire-lock' call in one of them will now be able to continue.
+ 
+ Returns the lock."
+-    (lisp (-> Result LispCondition Lock) (lock)
++    (lisp (-> Result LispError Lock) (lock)
+       (cl:handler-case (Ok (bt2:release-lock lock))
+         (cl:error (c) (Err c)))))
+ 
+@@ -299,28 +299,28 @@ that there is threading to be done, instead of assuming that it can go ahead."
+     (lisp (-> List LispThread) ()
+       (bt2:all-threads)))
+ 
+-  (declare join-thread (Thread :a -> (Result LispCondition :a)))
++  (declare join-thread (Thread :a -> (Result LispError :a)))
+   (define (join-thread thread)
+     "Wait until `thread' terminates, or if it has already terminated, return immediately."
+-    (lisp (-> Result LispCondition :a) (thread)
++    (lisp (-> Result LispError :a) (thread)
+       (cl:handler-case (Ok (bt2:join-thread thread))
+         (cl:error (c) (Err c)))))
+ 
+-  (declare interrupt ((Into :a LispThread) => :a * (Void -> Unit) -> (Result LispCondition :a)))
++  (declare interrupt ((Into :a LispThread) => :a * (Void -> Unit) -> (Result LispError :a)))
+   (define (interrupt thread thunk)
+     "Interrupt thread and call `thunk' within its dynamic context,
+ then continue with the interrupted path of execution."
+-    (lisp (-> Result LispCondition :a) (thread thunk)
++    (lisp (-> Result LispError :a) (thread thunk)
+       (cl:handler-case
+           (Ok (bt2:interrupt-thread
+                thread
+                (cl:lambda () (call-coalton-function thunk))))
+         (cl:error (c) (Err c)))))
+ 
+-  (declare destroy ((Into :a LispThread) => :a -> (Result LispCondition :a)))
++  (declare destroy ((Into :a LispThread) => :a -> (Result LispError :a)))
+   (define (destroy thread)
+     "Terminates the thread `thread'."
+-    (lisp (-> Result LispCondition :a) (thread)
++    (lisp (-> Result LispError :a) (thread)
+       (cl:handler-case (Ok (bt2:destroy-thread thread))
+         (cl:error (c) (Err c)))))
+ 
+diff --git a/src/utils.lisp b/src/utils.lisp
+index dad2159..97b8606 100644
+--- a/src/utils.lisp
++++ b/src/utils.lisp
+@@ -25,6 +25,7 @@
+    #:force-string
+    #:compose2
+    #:bit-odd?
++   #:InvalidArgument
+    #:Anything
+    #:to-anything
+    #:from-anything
+@@ -270,11 +271,15 @@ Coalton exceptions via `define-exception`."
+     Proxy)
+ 
+   (inline)
+-  (declare bit-odd? (b:Bits :a => :a -> Boolean))
++  (declare bit-odd? ((b:Bits :a) (Num :a) => :a -> Boolean))
+   (define (bit-odd? x)
+     "Efficiently determine if x is odd."
+     (/= (b:and x 1) 0))
+ 
++  (define-exception InvalidArgument
++    "Raised when an operation is given an invalid argument."
++    (InvalidArgument String))
++
+   (define-exception MockException
+     MockException)
+ 
