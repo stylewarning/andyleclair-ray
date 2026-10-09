@@ -146,17 +146,25 @@
   (define (sample-square)
     (values (- (util:rand-f64) 0.5d0) (- (util:rand-f64) 0.5d0)))
   
+  (declare closest-sphere (List s:Sphere * r:Ray * F64 * F64 * F64 * s:Sphere -> F64 * s:Sphere))
+  (define (closest-sphere spheres ray tmin closest best-t best)
+    (match spheres
+      ((Nil) (values best-t best))
+      ((Cons sphere rest)
+       (let t = (s:hit-t sphere ray tmin closest))
+       (if (< t 0.0d0)
+           (closest-sphere rest ray tmin closest best-t best)
+           (closest-sphere rest ray tmin t t sphere)))))
+
   (declare hit-any? (r:Ray * F64 * F64 -> Optional h:HitRecord))
   (define (hit-any? ray tmin tmax)
-    (let (Tuple closest-hit _) =
-      (fold 
-        (fn ((Tuple hit-rec closest-so-far) obj) 
-          (match (h:hit? obj ray tmin closest-so-far)
-            ((Some hit) (Tuple (Some hit) (.t hit)))
-            ((None) (Tuple hit-rec closest-so-far))))
-        (Tuple None tmax) 
-        scene:complex-world))
-    closest-hit)
+    (match scene:complex-world
+      ((Nil) None)
+      ((Cons first _)
+       (let (values best-t best) = (closest-sphere scene:complex-world ray tmin tmax -1.0d0 first))
+       (if (< best-t 0.0d0)
+           None
+           (Some (s:hit-record best ray best-t))))))
   
   (declare ray-color (r:Ray * UFix -> c:Color))
   (define (ray-color r depth)
