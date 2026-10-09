@@ -43,7 +43,7 @@
     (let ri = (if front-face? (/ 1.0d0 refraction-index) refraction-index))
     (let unit-direction = (v:unit-vector direction))
     (let cos-theta = (min (v:vec-dot (v:vec-negate unit-direction) normal) 1.0d0))
-    (let sin-theta = (math:sqrt (- 1.0d0 (^ cos-theta 2))))
+    (let sin-theta = (math:sqrt (- 1.0d0 (* cos-theta cos-theta))))
     (let cannot-refract = (> (* ri sin-theta) 1.0d0))
     ; If the material cannot refract it must reflect
     (let direction = (if (or cannot-refract 
@@ -57,7 +57,9 @@
     "Ye olde Schlick approximation for reflectance"
     (let r0 = (/ (- 1.0d0 refraction-index) (+ 1.0d0 refraction-index)))
     (let r0-sq = (* r0 r0))
-    (+ r0-sq (* (- 1.0d0 r0-sq) (^ (- 1.0d0 cosine) 5))))
+    (let x = (- 1.0d0 cosine))
+    (let x2 = (* x x))
+    (+ r0-sq (* (- 1.0d0 r0-sq) (* x (* x2 x2)))))
   
   (declare scatter (r:Ray * v:Vec3 * v:Vec3 * Boolean * Material -> Optional r:Ray * c:Color))
   (define (scatter (r:Ray _ direction) point normal front-face? material)

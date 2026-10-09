@@ -22,8 +22,8 @@
       (let oc = (v:vec-sub center origin))
       (let a = (v:vec-length-squared direction))
       (let h = (v:vec-dot direction oc))
-      (let c = (- (v:vec-length-squared oc) (^ radius 2)))
-      (let discriminant = (- (^ h 2) (* a c)))
+      (let c = (- (v:vec-length-squared oc) (* radius radius)))
+      (let discriminant = (- (* h h) (* a c)))
       (cond ((< discriminant 0) None)
             (True
               (let sqrtd = (sqrt discriminant))
