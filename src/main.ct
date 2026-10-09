@@ -1,14 +1,10 @@
 (cl:defpackage #:ray
   (:use #:coalton 
-        #:coalton-prelude
-        #:io/monad-io
-        #:io/simple-io
-        #:io/thread
-        #:io/conc/scheduler
-        #:io/conc/worker-pool)
-  (:import-from #:coalton/experimental/do-control-loops
-                #:do-loop-times)
+        #:coalton-prelude)
   (:local-nicknames
+    (#:par #:coalton/threads/parallel)
+    (#:atomic #:coalton/threads/atomic)
+    (#:mutex #:coalton/threads/mutex)
     (#:file #:coalton/file)
     (#:it #:coalton/iterator)
     (#:list #:coalton/list)
@@ -265,28 +261,24 @@
   (declare threaded-main (Void -> Void))
   (define (threaded-main)
     (let image-buffer = (la:make (* IMAGE-HEIGHT IMAGE-WIDTH) (c:Color 1.0d0 0.0d0 0.0d0)))
-    (run-io! 
-      (do 
-        ;; Setup the worker pool
-        (scheduler <- (new-bounded-scheduler NUM-THREADS))
-        (pool <- (new-worker-pool_ NUM-THREADS scheduler))
-        ;; Send off the work
-        (do-loop-times (y IMAGE-HEIGHT)
-          (io/term:write-line (<> "Scanlines remaining: " (into (- IMAGE-HEIGHT y))))
-            (do-submit-job_ pool
-              (wrap-io
-                (util:with-fresh-random-state
-                  (fn ()
-                    (coalton/experimental/loops:dotimes 
-                      (x IMAGE-WIDTH)
-                      (let color = (generate-pixel x y))
-                      (let offset = (+ x (* y IMAGE-WIDTH)))
-                      (la:set! image-buffer offset color))
-                    Unit)))))
-        ;; Wait for finish, then cleanup
-        (request-shutdown pool)
-        (await pool)))
-     (ppm:save-image image-buffer IMAGE-WIDTH IMAGE-HEIGHT COLORS))
+    (let remaining = (atomic:new IMAGE-HEIGHT))
+    (let print-lock = (mutex:new))
+    (par:set-worker-count! NUM-THREADS)
+    (par:for-range! 0 IMAGE-HEIGHT
+      (fn (y)
+        (util:with-fresh-random-state
+          (fn ()
+            (coalton/experimental/loops:dotimes 
+              (x IMAGE-WIDTH)
+              (let color = (generate-pixel x y))
+              (let offset = (+ x (* y IMAGE-WIDTH)))
+              (la:set! image-buffer offset color))
+            Unit))
+        (let left = (atomic:decrement! remaining))
+        (mutex:with-lock print-lock
+          (fn () (print (<> "Scanlines remaining: " (into left)))))
+        (values)))
+    (ppm:save-image image-buffer IMAGE-WIDTH IMAGE-HEIGHT COLORS))
 
   
   (declare main (Void -> Void))
