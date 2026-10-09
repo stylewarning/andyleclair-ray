@@ -146,25 +146,74 @@
   (define (sample-square)
     (values (- (util:rand-f64) 0.5d0) (- (util:rand-f64) 0.5d0)))
   
-  (declare closest-sphere (List s:Sphere * r:Ray * F64 * F64 * F64 * s:Sphere -> F64 * s:Sphere))
-  (define (closest-sphere spheres ray tmin closest best-t best)
+  (define-struct SceneArrays
+    "Sphere data laid out as flat arrays for fast intersection scans."
+    (cx (la:LispArray F64))
+    (cy (la:LispArray F64))
+    (cz (la:LispArray F64))
+    (rr (la:LispArray F64))
+    (spheres (la:LispArray s:Sphere)))
+
+  (declare fill-scene-arrays (SceneArrays * UFix * List s:Sphere -> Unit))
+  (define (fill-scene-arrays arrs i spheres)
     (match spheres
-      ((Nil) (values best-t best))
-      ((Cons sphere rest)
-       (let t = (s:hit-t sphere ray tmin closest))
-       (if (< t 0.0d0)
-           (closest-sphere rest ray tmin closest best-t best)
-           (closest-sphere rest ray tmin t t sphere)))))
+      ((Nil) Unit)
+      ((Cons sph rest)
+       (let (v:Vec3 x y z) = (.center sph))
+       (la:set! (.cx arrs) i x)
+       (la:set! (.cy arrs) i y)
+       (la:set! (.cz arrs) i z)
+       (la:set! (.rr arrs) i (* (.radius sph) (.radius sph)))
+       (la:set! (.spheres arrs) i sph)
+       (fill-scene-arrays arrs (1+ i) rest))))
+
+  (declare SCENE SceneArrays)
+  (define SCENE
+    (match scene:complex-world
+      ((Nil) (error "empty scene"))
+      ((Cons first _)
+       (let n = (list:length scene:complex-world))
+       (let arrs = (SceneArrays (la:make n 0.0d0) (la:make n 0.0d0) (la:make n 0.0d0)
+                                (la:make n 0.0d0) (la:make n first)))
+       (fill-scene-arrays arrs 0 scene:complex-world)
+       arrs)))
+
+  (declare scan-spheres (la:LispArray F64 * la:LispArray F64 * la:LispArray F64 * la:LispArray F64 *
+                         F64 * F64 * F64 * F64 * F64 * F64 * F64 * F64 *
+                         UFix * UFix * F64 * F64 * UFix -> F64 * UFix))
+  (define (scan-spheres cx cy cz rr ox oy oz dx dy dz a tmin n i closest best-t best-i)
+    "Find the closest sphere hit, returning its root (or -1) and index."
+    (if (>= i n)
+        (values best-t best-i)
+        (progn
+          (let ocx = (- (la:aref cx i) ox))
+          (let ocy = (- (la:aref cy i) oy))
+          (let ocz = (- (la:aref cz i) oz))
+          (let h = (+ (* dx ocx) (+ (* dy ocy) (* dz ocz))))
+          (let c = (- (+ (* ocx ocx) (+ (* ocy ocy) (* ocz ocz))) (la:aref rr i)))
+          (let discriminant = (- (* h h) (* a c)))
+          (if (< discriminant 0.0d0)
+              (scan-spheres cx cy cz rr ox oy oz dx dy dz a tmin n (1+ i) closest best-t best-i)
+              (progn
+                (let sqrtd = (sqrt discriminant))
+                (let minus-root = (/ (- h sqrtd) a))
+                (let pos-root = (/ (+ h sqrtd) a))
+                (if (or (or (<= minus-root tmin) (<= closest minus-root))
+                        (or (<= pos-root tmin) (<= closest pos-root)))
+                    (scan-spheres cx cy cz rr ox oy oz dx dy dz a tmin n (1+ i) closest best-t best-i)
+                    (scan-spheres cx cy cz rr ox oy oz dx dy dz a tmin n (1+ i) minus-root minus-root i)))))))
 
   (declare hit-any? (r:Ray * F64 * F64 -> Optional h:HitRecord))
   (define (hit-any? ray tmin tmax)
-    (match scene:complex-world
-      ((Nil) None)
-      ((Cons first _)
-       (let (values best-t best) = (closest-sphere scene:complex-world ray tmin tmax -1.0d0 first))
-       (if (< best-t 0.0d0)
-           None
-           (Some (s:hit-record best ray best-t))))))
+    (let (r:Ray (v:Vec3 ox oy oz) (v:Vec3 dx dy dz)) = ray)
+    (let a = (+ (* dx dx) (+ (* dy dy) (* dz dz))))
+    (let sc = SCENE)
+    (let (values best-t best-i) =
+      (scan-spheres (.cx sc) (.cy sc) (.cz sc) (.rr sc) ox oy oz dx dy dz a tmin
+                    (la:length (.rr sc)) 0 tmax -1.0d0 0))
+    (if (< best-t 0.0d0)
+        None
+        (Some (s:hit-record (la:aref (.spheres sc) best-i) ray best-t))))
   
   (declare ray-color (r:Ray * UFix -> c:Color))
   (define (ray-color r depth)

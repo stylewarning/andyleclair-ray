@@ -4,7 +4,7 @@
                                  (#:h #:ray/hittable)
                                  (#:r #:ray/ray)
                                  (#:m #:ray/material))
-               (:export #:Sphere #:hit-t #:hit-record))
+               (:export #:Sphere #:hit-record))
 
 (cl:in-package #:ray/sphere)
 
@@ -38,30 +38,6 @@
                       (let front-face = (< (v:vec-dot direction outward-normal) 0))
                       (let normal = (if front-face outward-normal (v:vec-negate outward-normal)))
                       (Some (h:HitRecord point normal minus-root front-face material))))))))
-
-  (declare hit-t (Sphere * r:Ray * F64 * F64 -> F64))
-  (define (hit-t (Sphere center radius _) (r:Ray origin direction) tmin tmax)
-    "Same test as HIT?, but returns only the root, or -1 on a miss, without allocating."
-    (let (v:Vec3 cx cy cz) = center)
-    (let (v:Vec3 ox oy oz) = origin)
-    (let (v:Vec3 dx dy dz) = direction)
-    (let ocx = (- cx ox))
-    (let ocy = (- cy oy))
-    (let ocz = (- cz oz))
-    (let a = (+ (* dx dx) (+ (* dy dy) (* dz dz))))
-    (let h = (+ (* dx ocx) (+ (* dy ocy) (* dz ocz))))
-    (let c = (- (+ (* ocx ocx) (+ (* ocy ocy) (* ocz ocz))) (* radius radius)))
-    (let discriminant = (- (* h h) (* a c)))
-    (if (< discriminant 0)
-        -1.0d0
-        (progn
-          (let sqrtd = (sqrt discriminant))
-          (let minus-root = (/ (- h sqrtd) a))
-          (let pos-root = (/ (+ h sqrtd) a))
-          (if (or (or (<= minus-root tmin) (<= tmax minus-root))
-                  (or (<= pos-root tmin) (<= tmax pos-root)))
-              -1.0d0
-              minus-root))))
 
   (declare hit-record (Sphere * r:Ray * F64 -> h:HitRecord))
   (define (hit-record (Sphere center radius material) ray root)
