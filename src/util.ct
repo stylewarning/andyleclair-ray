@@ -3,7 +3,8 @@
                (:local-nicknames (#:trig #:coalton/math/elementary))
                (:export #:deg-to-rad
                         #:rand-f64
-                        #:rand-f64-range))
+                        #:rand-f64-range
+                        #:with-fresh-random-state))
 
 (cl:in-package #:ray/util)
 
@@ -19,6 +20,13 @@
   (define (rand-f64)
     (lisp (-> F64) () (cl:random 1.0d0)))
   
+  (declare with-fresh-random-state ((Void -> :a) -> :a))
+  (define (with-fresh-random-state thunk)
+    "Call THUNK with its own freshly seeded random state, so threads don't share one."
+    (lisp (-> :a) (thunk)
+      (cl:let ((cl:*random-state* (cl:make-random-state cl:t)))
+        (call-coalton-function thunk))))
+
   (declare rand-f64-range (F64 * F64 -> F64))
   (define (rand-f64-range min max)
     (+ min (* (- max min) (rand-f64))))

@@ -275,12 +275,14 @@
           (io/term:write-line (<> "Scanlines remaining: " (into (- IMAGE-HEIGHT y))))
             (do-submit-job_ pool
               (wrap-io
-                (coalton/experimental/loops:dotimes 
-                  (x IMAGE-WIDTH)
-                  (let color = (generate-pixel x y))
-                  (let offset = (+ x (* y IMAGE-WIDTH)))
-                  (la:set! image-buffer offset color))
-                Unit)))
+                (util:with-fresh-random-state
+                  (fn ()
+                    (coalton/experimental/loops:dotimes 
+                      (x IMAGE-WIDTH)
+                      (let color = (generate-pixel x y))
+                      (let offset = (+ x (* y IMAGE-WIDTH)))
+                      (la:set! image-buffer offset color))
+                    Unit)))))
         ;; Wait for finish, then cleanup
         (request-shutdown pool)
         (await pool)))
